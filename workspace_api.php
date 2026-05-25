@@ -53,7 +53,7 @@ if (!is_array($input)) {
 function workspace_parse_repo($value) {
     $value = trim((string)$value);
     if ($value === '') return null;
-    if (preg_match('#github\.com/([^/]+)/([^/?#]+)#i', $value, $m)) {
+    if (preg_match('~github\.com/([^/]+)/([^/?#]+)~i', $value, $m)) {
         return [$m[1], preg_replace('/\.git$/', '', $m[2])];
     }
     if (preg_match('#^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$#', $value, $m)) {

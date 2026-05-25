@@ -41,7 +41,7 @@ function parse_github_repo($value) {
     if (preg_match('#^git@github\.com:([^/]+)/(.+?)(?:\.git)?$#i', $value, $m)) {
         return [$m[1], preg_replace('/\.git$/', '', $m[2])];
     }
-    if (preg_match('#github\.com/([^/]+)/([^/?#]+)#i', $value, $m)) {
+    if (preg_match('~github\.com/([^/]+)/([^/?#]+)~i', $value, $m)) {
         return [$m[1], preg_replace('/\.git$/', '', $m[2])];
     }
     if (preg_match('#^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$#', $value, $m)) {
@@ -594,7 +594,56 @@ label{display:block;font-size:12px;color:var(--muted);margin:12px 0 7px}
 .preview-panel.open{display:flex}
 .preview-head{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--line)}
 .preview-frame{flex:1;width:100%;border:0;background:white;border-radius:0 0 14px 14px}
-@media(max-width:900px){.app{grid-template-columns:1fr}.side{position:static;border-right:0;border-bottom:1px solid var(--line)}.main{padding:28px 16px}.hero{margin-top:42px}.selectors,.workspace-panels{grid-template-columns:1fr}.top-actions{position:static;align-self:flex-end}.preview-panel{inset:8px}}
+.main{align-items:stretch;padding:0;min-width:0}
+.top-actions{position:absolute;right:18px;top:10px;z-index:5}
+.coder-shell{display:grid;grid-template-columns:minmax(360px,42%) minmax(0,58%);height:100vh;min-height:720px}
+.coder-chat{display:flex;flex-direction:column;gap:16px;min-width:0;padding:52px 20px 18px;background:#f7f7fa;color:#19191f;border-right:1px solid #dbdce5}
+.coder-chat h1{font-size:16px;color:#1c1c22;margin:0}
+.coder-chat .sub{font-size:13px;color:#6d7080;margin:0}
+.coder-chat .status{width:100%;margin:0}
+.coder-thread{flex:1;overflow:auto;padding-right:4px}
+.coder-empty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:#787b8b;font-size:14px;line-height:1.5}
+.coder-turn{margin-bottom:18px}
+.coder-bubble{max-width:90%;padding:13px 15px;border-radius:18px;font-size:14px;line-height:1.55;white-space:pre-wrap}
+.coder-bubble.user{margin-left:auto;background:#ececf3;color:#1f2028}
+.coder-bubble.assistant{background:transparent;color:#22232b;padding-left:0}
+.coder-work-label{display:flex;align-items:center;gap:9px;font-weight:750;color:#1c1c22;margin:0 0 10px}
+.coder-work-label span{font-weight:500;color:#7c7f8d;font-size:13px}
+.composer{background:#f0f1f6;border-color:#e0e1ea;border-radius:22px;box-shadow:none}
+.selectors{grid-template-columns:1fr 128px}
+.select-shell i{color:#747887}
+select,.branch-input,input,textarea{background:#fff;color:#16171d;border-color:#e1e2ea}
+.prompt{min-height:76px;color:#16171d}
+.prompt::placeholder{color:#a4a7b5}
+.send{background:#dddfeb;color:#a8acbb}
+.send.ready{background:#d4d7e4;color:#4d5060}
+.quick{justify-content:flex-start;margin-top:0;gap:8px}
+.chip{background:#fff;color:#24252d;border-color:#e2e3eb}
+.coder-code-panel{min-width:0;padding:48px 18px 18px;background:#f2f3f8;color:#15161c;overflow:auto}
+.coder-code-panel .workspace-tabs{width:100%;margin:0 0 10px;justify-content:center}
+.coder-code-panel .workspace-tab{background:#fff;color:#464958;border-color:#e1e2eb;padding:7px 14px}
+.coder-code-panel .workspace-tab.active{background:#2385ff;color:white}
+.coder-code-panel .tab-panel{width:100%}
+.coder-code-panel .workspace-panels{width:100%;margin:0;grid-template-columns:1fr}
+.coder-code-panel .card{background:transparent;border:0;border-radius:0;padding:0;color:#191a22}
+.coder-code-panel .card h2{display:none}
+.coder-code-panel label,.coder-code-panel .hint,.coder-code-panel .meta{color:#747887}
+.coder-code-panel .draft{min-height:110px;max-height:170px;background:#fff;color:#23242c;border-color:#e2e3eb}
+.coder-code-panel .generated-review{grid-template-columns:220px minmax(0,1fr);gap:14px;height:calc(100vh - 255px);min-height:470px}
+.coder-code-panel .generated-list{background:#fff;border-color:#e1e2eb;max-height:none}
+.coder-code-panel .generated-item{color:#23242c;border-color:#ececf3}
+.coder-code-panel .generated-item:hover,.coder-code-panel .generated-item.active{background:#eaf2ff}
+.coder-code-panel .review-pane{background:#fff;border-color:#e1e2eb;min-height:0;height:100%;border-radius:14px}
+.coder-code-panel .review-tabs{justify-content:center;background:#f7f8fb;border-color:#e1e2eb}
+.coder-code-panel .review-tab{background:#fff;color:#4b4e5d;border-color:#e1e2eb}
+.coder-code-panel .review-tab.active{background:#2385ff;color:#fff}
+.coder-code-panel .review-code,.coder-code-panel .review-diff{min-height:0;color:#20222b;background:#fff}
+.coder-code-panel .review-empty{color:#777b8d}
+.coder-code-panel .btn.secondary{background:#fff;color:#292b34;border-color:#e1e2eb}
+.coder-code-panel .btn.primary{background:#5b5cf6}
+.coder-code-panel .file-list{max-height:280px}
+@media(max-width:1100px){.coder-shell{grid-template-columns:1fr;height:auto}.coder-chat{min-height:520px;border-right:0;border-bottom:1px solid #dbdce5}.coder-code-panel .generated-review{height:auto;min-height:520px}}
+@media(max-width:900px){.app{grid-template-columns:1fr}.side{position:static;border-right:0;border-bottom:1px solid var(--line)}.main{padding:0}.coder-shell{height:auto;min-height:0}.coder-chat{padding:28px 14px}.selectors,.workspace-panels,.coder-code-panel .generated-review{grid-template-columns:1fr}.top-actions{position:fixed;right:10px;top:10px}.preview-panel{inset:8px}}
 </style>
 </head>
 <body>
@@ -632,15 +681,37 @@ label{display:block;font-size:12px;color:var(--muted);margin:12px 0 7px}
       <button class="pill-btn" type="button" onclick="publishGenerated()"><i class="fa-brands fa-github"></i> Publier GitHub</button>
     </div>
 
-    <section class="hero">
-      <h1><?= htmlspecialchars($t('libre_coder')) ?></h1>
-      <p class="sub"><?= htmlspecialchars($t('ai_coder_sub')) ?></p>
+    <div class="coder-shell">
+    <section class="coder-chat">
+      <div>
+        <h1><?= htmlspecialchars($t('libre_coder')) ?></h1>
+        <p class="sub"><?= htmlspecialchars($github && !empty($github['owner']) ? $github['owner'] . '/' . ($github['repo'] ?? '') . ' · ' . ($github['branch'] ?: 'main') : $t('ai_coder_sub')) ?></p>
+      </div>
 
       <div class="status">
         <?php if (($_GET['github'] ?? '') === 'connected'): ?><div class="msg ok"><?= htmlspecialchars($t('github_oauth_success')) ?></div><?php endif; ?>
         <?php if (!empty($_GET['github_error'])): ?><div class="msg err"><?= htmlspecialchars($t('github_oauth_failed')) ?><?php if ($githubOauthErrorDetail): ?><br><small><?= htmlspecialchars($githubOauthErrorDetail) ?></small><?php endif; ?></div><?php endif; ?>
         <?php if ($success): ?><div class="msg ok"><?= htmlspecialchars($success) ?></div><?php endif; ?>
         <?php if ($error): ?><div class="msg err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+      </div>
+
+      <div class="coder-thread">
+        <?php if ($aiPrompt): ?>
+          <div class="coder-turn">
+            <div class="coder-bubble user"><?= htmlspecialchars($aiPrompt) ?></div>
+          </div>
+          <div class="coder-turn">
+            <div class="coder-work-label">Work completed <span>· <?= htmlspecialchars(date('H:i')) ?></span></div>
+            <div class="coder-bubble assistant"><?= htmlspecialchars($aiCodeReply ?: $t('ai_coder_ready')) ?></div>
+          </div>
+        <?php else: ?>
+          <div class="coder-empty">
+            <div>
+              <strong><?= htmlspecialchars($t('libre_coder')) ?></strong><br>
+              <?= htmlspecialchars($t('ai_coder_sub')) ?>
+            </div>
+          </div>
+        <?php endif; ?>
       </div>
 
       <form class="composer" method="POST" id="coder-form">
@@ -681,6 +752,7 @@ label{display:block;font-size:12px;color:var(--muted);margin:12px 0 7px}
       </div>
     </section>
 
+    <section class="coder-code-panel">
     <div class="workspace-tabs">
       <button class="workspace-tab active" type="button" data-workspace-tab="publish">Publication</button>
       <button class="workspace-tab" type="button" data-workspace-tab="settings">Paramètres</button>
@@ -805,6 +877,8 @@ label{display:block;font-size:12px;color:var(--muted);margin:12px 0 7px}
       </div>
       </div>
     </section>
+    </section>
+    </div>
   </main>
 </div>
 

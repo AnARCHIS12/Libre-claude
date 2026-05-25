@@ -1206,7 +1206,7 @@ body {
             <div class="starter-title"><?= htmlspecialchars($t('concept_title')) ?></div>
             <div class="starter-desc"><?= htmlspecialchars($t('concept_desc')) ?></div>
           </div>
-          <div class="starter-card" onclick="setPrompt(<?= $jsText('code_prompt') ?>)">
+          <div class="starter-card" onclick="window.location.href='workspace.php'">
             <i class="starter-icon fa-solid fa-code"></i>
             <div class="starter-title"><?= htmlspecialchars($t('code_title')) ?></div>
             <div class="starter-desc"><?= htmlspecialchars($t('code_desc')) ?></div>
@@ -1288,7 +1288,7 @@ body {
         <div class="input-actions">
           <div class="quick-btns">
             <button class="quick-btn" onclick="setPrompt(<?= $jsText('quick_explain_prompt') ?>)"><i class="fa-solid fa-lightbulb"></i><?= htmlspecialchars($t('explain')) ?></button>
-            <button class="quick-btn" onclick="setPrompt(<?= $jsText('quick_code_prompt') ?>)"><i class="fa-solid fa-code"></i><?= htmlspecialchars($t('code')) ?></button>
+            <button class="quick-btn" onclick="window.location.href='workspace.php'"><i class="fa-solid fa-code"></i><?= htmlspecialchars($t('code')) ?></button>
             <button class="quick-btn" onclick="setPrompt(<?= $jsText('quick_analyze_prompt') ?>)"><i class="fa-solid fa-magnifying-glass-chart"></i><?= htmlspecialchars($t('analyze')) ?></button>
             <button class="quick-btn" onclick="setPrompt(<?= $jsText('quick_plan_prompt') ?>)"><i class="fa-solid fa-list-check"></i><?= htmlspecialchars($t('plan')) ?></button>
           </div>
