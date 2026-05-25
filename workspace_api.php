@@ -130,6 +130,23 @@ function workspace_github_get_file($owner, $repo, $branch, $path, $token, &$erro
     ];
 }
 
+function workspace_github_save_file($owner, $repo, $branch, $path, $content, $message, $token, &$error) {
+    $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
+        . '/contents/' . workspace_github_path($path);
+    $body = [
+        'message' => $message ?: 'Initial commit from Libre Claude Coder',
+        'content' => base64_encode((string)$content),
+    ];
+    if ($branch !== '') $body['branch'] = $branch ?: 'main';
+    return workspace_github_request('PUT', $url, $token, $body, $error);
+}
+
+function workspace_github_create_initial_file($owner, $repo, $branch, $path, $content, $message, $token, &$error) {
+    $initial = workspace_github_save_file($owner, $repo, $branch ?: 'main', $path, $content, $message, $token, $error);
+    if ($initial || stripos($error, 'HTTP 422') === false) return $initial;
+    return workspace_github_save_file($owner, $repo, '', $path, $content, $message, $token, $error);
+}
+
 function workspace_clean_files($items) {
     if (!is_array($items)) return [];
     $files = [];
@@ -144,8 +161,10 @@ function workspace_clean_files($items) {
 
 function workspace_commit_files($owner, $repo, $branch, $files, $message, $token, &$error) {
     $branch = $branch ?: 'main';
+    $cleanFiles = [];
     $treeItems = [];
     foreach ($files as $file) {
+        $cleanFiles[] = ['path' => $file['path'], 'content' => (string)$file['content']];
         $treeItems[] = [
             'path' => $file['path'],
             'mode' => '100644',
@@ -165,6 +184,43 @@ function workspace_commit_files($owner, $repo, $branch, $files, $message, $token
     $isEmptyRepo = !$ref && (stripos($refError, 'Git Repository is empty') !== false || stripos($refError, 'HTTP 409') !== false);
     $parentSha = '';
     $baseTreeSha = '';
+
+    if ($isEmptyRepo) {
+        $first = array_shift($cleanFiles);
+        $initial = workspace_github_create_initial_file(
+            $owner,
+            $repo,
+            $branch,
+            $first['path'],
+            $first['content'],
+            $message ?: 'Initial commit from Libre Claude Coder',
+            $token,
+            $error
+        );
+        if (!$initial) return null;
+        $initialCommitSha = $initial['commit']['sha'] ?? '';
+        if (!$cleanFiles) {
+            return [
+                'sha' => $initialCommitSha,
+                'branch' => $branch,
+                'url' => $initialCommitSha ? 'https://github.com/' . $owner . '/' . $repo . '/commit/' . $initialCommitSha : 'https://github.com/' . $owner . '/' . $repo,
+            ];
+        }
+
+        $treeItems = [];
+        foreach ($cleanFiles as $file) {
+            $treeItems[] = [
+                'path' => $file['path'],
+                'mode' => '100644',
+                'type' => 'blob',
+                'content' => $file['content'],
+            ];
+        }
+
+        $refError = '';
+        $ref = workspace_github_request('GET', $refUrl, $token, null, $refError);
+        $isEmptyRepo = false;
+    }
 
     if (!$isEmptyRepo) {
         if (!$ref || empty($ref['object']['sha'])) {

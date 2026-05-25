@@ -127,10 +127,16 @@ function github_save_file($owner, $repo, $branch, $path, $content, $message, $sh
     $body = [
         'message' => $message ?: 'Update ' . $path,
         'content' => base64_encode($content),
-        'branch' => $branch ?: 'main',
     ];
+    if ($branch !== '') $body['branch'] = $branch ?: 'main';
     if ($sha) $body['sha'] = $sha;
     return github_api_request('PUT', $url, $token, $body, $error);
+}
+
+function github_create_initial_file($owner, $repo, $branch, $path, $content, $message, $token, &$error) {
+    $initial = github_save_file($owner, $repo, $branch ?: 'main', $path, $content, $message, '', $token, $error);
+    if ($initial || stripos($error, 'HTTP 422') === false) return $initial;
+    return github_save_file($owner, $repo, '', $path, $content, $message, '', $token, $error);
 }
 
 function github_create_repo($name, $description, $private, $token, &$error) {
@@ -301,10 +307,12 @@ function workspace_ai_code($instruction, $contextFiles, $repoFiles, $user, &$raw
 
 function github_commit_files($owner, $repo, $branch, $files, $message, $token, &$error) {
     $branch = $branch ?: 'main';
+    $cleanFiles = [];
     $treeItems = [];
     foreach ($files as $file) {
         $path = trim($file['path'] ?? '');
         if ($path === '' || !array_key_exists('content', $file)) continue;
+        $cleanFiles[] = ['path' => $path, 'content' => (string)$file['content']];
         $treeItems[] = [
             'path' => $path,
             'mode' => '100644',
@@ -324,6 +332,36 @@ function github_commit_files($owner, $repo, $branch, $files, $message, $token, &
     $isEmptyRepo = !$ref && (stripos($refError, 'Git Repository is empty') !== false || stripos($refError, 'HTTP 409') !== false);
     $parentSha = '';
     $baseTreeSha = '';
+
+    if ($isEmptyRepo) {
+        $first = array_shift($cleanFiles);
+        $initial = github_create_initial_file(
+            $owner,
+            $repo,
+            $branch,
+            $first['path'],
+            $first['content'],
+            $message ?: 'Initial commit from Libre Claude',
+            $token,
+            $error
+        );
+        if (!$initial) return null;
+        if (!$cleanFiles) return $initial;
+
+        $treeItems = [];
+        foreach ($cleanFiles as $file) {
+            $treeItems[] = [
+                'path' => $file['path'],
+                'mode' => '100644',
+                'type' => 'blob',
+                'content' => $file['content'],
+            ];
+        }
+
+        $refError = '';
+        $ref = github_api_request('GET', $refUrl, $token, null, $refError);
+        $isEmptyRepo = false;
+    }
 
     if (!$isEmptyRepo) {
         if (!$ref || empty($ref['object']['sha'])) {
