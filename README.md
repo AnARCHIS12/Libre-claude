@@ -539,6 +539,10 @@ mv data/voanh.sqlite data/libre_claude.sqlite
 mv data/voanh.log data/libre_claude.log
 ```
 
+## Remerciements
+
+Merci à [LaurentVoanh](https://github.com/LaurentVoanh) pour ce projet génial.
+
 ## Licence
 
 Libre Claude est distribué sous licence **MIT**.
