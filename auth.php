@@ -1,6 +1,6 @@
 <?php
 /**
- * VoAnh - Authentification (Hostinger compatible)
+ * Libre Claude - Authentification (Hostinger compatible)
  */
 
 require_once dirname(__FILE__) . '/database.php';
@@ -34,10 +34,10 @@ class Auth {
                 'email'         => $email,
                 'password_hash' => password_hash($password, PASSWORD_DEFAULT),
             ]);
-            voanh_log("New user registered: $username (id=$userId)", 3);
+            libreclaude_log("New user registered: $username (id=$userId)", 3);
             return ['success' => true, 'user_id' => $userId];
         } catch (Exception $e) {
-            voanh_log("Register error: " . $e->getMessage(), 1);
+            libreclaude_log("Register error: " . $e->getMessage(), 1);
             return ['success' => false, 'error' => 'Erreur lors de l\'inscription'];
         }
     }
@@ -94,7 +94,7 @@ class Auth {
         $_SESSION['session_token'] = $token;
         $_SESSION['username']      = $user['username'];
 
-        voanh_log("User logged in: {$user['username']}", 3);
+        libreclaude_log("User logged in: {$user['username']}", 3);
         return ['success' => true, 'user' => $user];
     }
 
@@ -128,8 +128,37 @@ class Auth {
         return $this->db->fetch("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
     }
 
+    public function getUserByApiToken($token) {
+        if (!preg_match('/^lc_sk_[A-Fa-f0-9]{64}$/', $token)) return null;
+
+        $hash = hash('sha256', $token);
+        $row = $this->db->fetch(
+            "SELECT t.id AS token_id, t.user_id, u.*
+             FROM api_tokens t
+             JOIN users u ON u.id = t.user_id
+             WHERE t.token_hash = ?
+               AND t.is_active = 1
+               AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))",
+            [$hash]
+        );
+        if (!$row) return null;
+
+        $this->db->update('api_tokens', ['last_used_at' => date('Y-m-d H:i:s')], 'id = ?', [$row['token_id']]);
+        return $row;
+    }
+
     public function updateApiKey($userId, $apiKey) {
         $this->db->update('users', ['mistral_api_key' => trim($apiKey)], 'id = ?', [$userId]);
+        return ['success' => true];
+    }
+
+    public function updateSettings($userId, $settings) {
+        $current = $this->db->fetch("SELECT settings FROM users WHERE id = ?", [$userId]);
+        $data = json_decode($current['settings'] ?? '{}', true);
+        if (!is_array($data)) $data = [];
+
+        $data = array_merge($data, $settings);
+        $this->db->update('users', ['settings' => json_encode($data)], 'id = ?', [$userId]);
         return ['success' => true];
     }
 }

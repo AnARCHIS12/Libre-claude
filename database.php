@@ -1,26 +1,37 @@
 <?php
 /**
- * VoAnh - Base de Données SQLite (Hostinger Compatible)
+ * Libre Claude - Base de Données SQLite (Hostinger Compatible)
  */
 
 require_once dirname(__FILE__) . '/config.php';
+
+$databaseConfigurations = (object) [
+    'file' => DB_FILE,
+    'pragmas' => [
+        'journal_mode' => 'WAL',
+        'synchronous'  => 'NORMAL',
+        'cache_size'   => 5000,
+        'temp_store'   => 'MEMORY',
+    ],
+];
 
 class Database {
     private static $instance = null;
     private $pdo;
 
     private function __construct() {
+        global $databaseConfigurations;
+
         try {
-            $this->pdo = new PDO('sqlite:' . DB_FILE);
+            $this->pdo = new PDO('sqlite:' . $databaseConfigurations->file);
             $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-            $this->pdo->exec('PRAGMA journal_mode=WAL');
-            $this->pdo->exec('PRAGMA synchronous=NORMAL');
-            $this->pdo->exec('PRAGMA cache_size=5000');
-            $this->pdo->exec('PRAGMA temp_store=MEMORY');
+            foreach ($databaseConfigurations->pragmas as $name => $value) {
+                $this->pdo->exec("PRAGMA $name=$value");
+            }
             $this->initTables();
         } catch (PDOException $e) {
-            voanh_log("DB error: " . $e->getMessage(), 1);
+            libreclaude_log("DB error: " . $e->getMessage(), 1);
             throw $e;
         }
     }
@@ -75,9 +86,65 @@ class Database {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS api_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            token_hash TEXT UNIQUE NOT NULL,
+            prefix TEXT NOT NULL,
+            last_four TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_used_at DATETIME,
+            expires_at DATETIME,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS workspace_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            language TEXT DEFAULT 'text',
+            content TEXT NOT NULL,
+            source_conversation_id INTEGER,
+            github_path TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS workspace_github (
+            user_id INTEGER PRIMARY KEY,
+            repo_url TEXT,
+            owner TEXT,
+            repo TEXT,
+            branch TEXT DEFAULT 'main',
+            token TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS user_memories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            scope TEXT DEFAULT 'general',
+            content TEXT NOT NULL,
+            key_hash TEXT NOT NULL,
+            source_conversation_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_used_at DATETIME,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
         CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
         CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id);
         CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id);
+        CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
+        CREATE INDEX IF NOT EXISTS idx_workspace_files_user ON workspace_files(user_id, updated_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_user_memories_hash ON user_memories(user_id, scope, key_hash);
+        CREATE INDEX IF NOT EXISTS idx_user_memories_user ON user_memories(user_id, scope, updated_at);
         ";
         foreach (explode(';', $sql) as $q) {
             $q = trim($q);
@@ -113,6 +180,23 @@ class Database {
 
     public function delete($table, $where, $params = []) {
         $this->query("DELETE FROM $table WHERE $where", $params);
+    }
+
+    public function isInstalled() {
+        $row = $this->fetch("SELECT COUNT(*) AS total FROM users");
+        return ((int)($row['total'] ?? 0)) > 0;
+    }
+
+    public function getSetting($key, $default = null) {
+        $row = $this->fetch("SELECT value FROM app_settings WHERE key = ?", [$key]);
+        return $row ? $row['value'] : $default;
+    }
+
+    public function setSetting($key, $value) {
+        $this->query(
+            "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+            [$key, $value]
+        );
     }
 
     public function beginTransaction() { $this->pdo->beginTransaction(); }

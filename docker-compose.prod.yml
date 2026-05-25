@@ -1,0 +1,18 @@
+services:
+  libre-claude:
+    image: liberchat/libre-claude:latest
+    container_name: libre-claude
+    ports:
+      - "8173:80"
+    environment:
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+    volumes:
+      - libre_claude_data:/var/www/html/data
+      - libre_claude_sandbox:/var/www/html/sandbox
+    restart: unless-stopped
+
+volumes:
+  libre_claude_data:
+  libre_claude_sandbox:
+

@@ -1,11 +1,16 @@
 <?php
 /**
- * VoAnh - Configuration Principale (Hostinger Mutualisé)
+ * Libre Claude - Configuration Principale (Hostinger Mutualisé)
  * Compatible PHP 8.3 mutualisé - sans exec/shell_exec/putenv
  */
 
-if (!defined('VOANH_INIT')) {
-    define('VOANH_INIT', true);
+if (!defined('LIBRE_CLAUDE_INIT')) {
+    define('LIBRE_CLAUDE_INIT', true);
+}
+
+function libreclaude_env($key, $default = '') {
+    $value = getenv($key);
+    return $value === false || $value === '' ? $default : $value;
 }
 
 // Chemins (tout à la racine)
@@ -14,7 +19,7 @@ define('DATA_PATH', ROOT_PATH . '/data');
 define('SANDBOX_PATH', ROOT_PATH . '/sandbox');
 
 // Base de données SQLite
-define('DB_FILE', DATA_PATH . '/voanh.sqlite');
+define('DB_FILE', DATA_PATH . '/libre_claude.sqlite');
 
 // API Keys Mistral (rotation automatique)
 define('DEFAULT_MISTRAL_API_KEYS', [
@@ -25,47 +30,77 @@ define('DEFAULT_MISTRAL_API_KEYS', [
 
 // Endpoint Mistral
 define('MISTRAL_API_ENDPOINT', 'https://api.mistral.ai/v1/chat/completions');
+define('MISTRAL_TRANSCRIPTION_ENDPOINT', 'https://api.mistral.ai/v1/audio/transcriptions');
+
+// GitHub OAuth (optionnel)
+// Créez une OAuth App GitHub avec comme callback :
+// http(s)://votre-domaine.com/github_oauth.php
+define('GITHUB_OAUTH_CLIENT_ID', libreclaude_env('GITHUB_OAUTH_CLIENT_ID', ''));
+define('GITHUB_OAUTH_CLIENT_SECRET', libreclaude_env('GITHUB_OAUTH_CLIENT_SECRET', ''));
 
 // Modèles organisés par catégorie
 define('MISTRAL_MODELS', [
     'flagship' => [
-        ['id' => 'mistral-large-2512', 'name' => 'Mistral Brain Ultra', 'desc' => 'Raisonnement avancé, contextes massifs'],
-        ['id' => 'mistral-large-2411', 'name' => 'Mistral Brain Legacy', 'desc' => 'Version stable entreprise'],
+        ['id' => 'mistral-large-2512', 'name' => 'Claude Opus 4.5', 'desc' => 'Raisonnement avancé, contextes massifs'],
+        ['id' => 'mistral-large-2411', 'name' => 'Claude Opus 4', 'desc' => 'Version stable entreprise'],
     ],
     'medium' => [
-        ['id' => 'mistral-medium-2508', 'name' => 'Corporate Engine Pro', 'desc' => 'Analyse textuelle, rédaction'],
-        ['id' => 'mistral-medium-2505', 'name' => 'Corporate Engine Standard', 'desc' => 'RAG, synthèse documents'],
+        ['id' => 'mistral-medium-2508', 'name' => 'Claude Sonnet 4.5', 'desc' => 'Analyse textuelle, rédaction'],
+        ['id' => 'mistral-medium-2505', 'name' => 'Claude Sonnet 4', 'desc' => 'RAG, synthèse documents'],
     ],
     'small' => [
-        ['id' => 'mistral-small-2603', 'name' => 'Fast Automate Turbo', 'desc' => 'Extraction masse, pipelines'],
-        ['id' => 'mistral-small-2506', 'name' => 'Fast Automate Standard', 'desc' => 'Classification, tagging'],
+        ['id' => 'mistral-small-2603', 'name' => 'Claude Haiku 4.5', 'desc' => 'Extraction masse, pipelines'],
+        ['id' => 'mistral-small-2506', 'name' => 'Claude Haiku 4', 'desc' => 'Classification, tagging'],
     ],
     'code' => [
-        ['id' => 'codestral-2508', 'name' => 'Code Master Ultimate', 'desc' => 'Auto-complétion, FIM temps réel'],
-        ['id' => 'devstral-2512', 'name' => 'Dev Agent Pro', 'desc' => 'Architecture, déploiement, refactoring'],
-        ['id' => 'devstral-medium-2507', 'name' => 'Dev Agent Medium', 'desc' => 'Débogage, patterns complexes'],
-        ['id' => 'devstral-small-2507', 'name' => 'Dev Agent Light', 'desc' => 'Tests unitaires, CI/CD'],
+        ['id' => 'codestral-2508', 'name' => 'Claude Code Max', 'desc' => 'Auto-complétion, FIM temps réel'],
+        ['id' => 'devstral-2512', 'name' => 'Claude Code Opus', 'desc' => 'Architecture, déploiement, refactoring'],
+        ['id' => 'devstral-medium-2507', 'name' => 'Claude Code Sonnet', 'desc' => 'Débogage, patterns complexes'],
+        ['id' => 'devstral-small-2507', 'name' => 'Claude Code Haiku', 'desc' => 'Tests unitaires, CI/CD'],
     ],
     'agent' => [
-        ['id' => 'magistral-medium-2509', 'name' => 'Agent Router Medium', 'desc' => 'Orchestration multi-agents'],
-        ['id' => 'magistral-small-2509', 'name' => 'Agent Router Small', 'desc' => 'Routage rapide prompts'],
+        ['id' => 'magistral-medium-2509', 'name' => 'Claude Agent Sonnet', 'desc' => 'Orchestration multi-agents'],
+        ['id' => 'magistral-small-2509', 'name' => 'Claude Agent Haiku', 'desc' => 'Routage rapide prompts'],
     ],
     'vision' => [
-        ['id' => 'pixtral-large-2411', 'name' => 'Vision Analyzer Max', 'desc' => 'UI, plans, diagrammes complexes'],
-        ['id' => 'pixtral-12b-2409', 'name' => 'Vision Analyzer Light', 'desc' => 'OCR, détection objets'],
+        ['id' => 'pixtral-large-2411', 'name' => 'Claude Vision Opus', 'desc' => 'UI, plans, diagrammes complexes'],
+        ['id' => 'pixtral-12b-2409', 'name' => 'Claude Vision Haiku', 'desc' => 'OCR, détection objets'],
     ],
     'creative' => [
-        ['id' => 'labs-mistral-small-creative', 'name' => 'Creative Writer', 'desc' => 'Storytelling, brainstorming'],
+        ['id' => 'labs-mistral-small-creative', 'name' => 'Claude Muse', 'desc' => 'Storytelling, brainstorming'],
     ],
     'edge' => [
-        ['id' => 'ministral-14b-2512', 'name' => 'Local Engine Heavy', 'desc' => 'Modèle compact puissant'],
-        ['id' => 'ministral-8b-2512', 'name' => 'Local Engine Medium', 'desc' => 'All-rounder mobile'],
-        ['id' => 'ministral-3b-2512', 'name' => 'Local Engine Micro', 'desc' => 'Ultra-léger, commande vocale'],
+        ['id' => 'ministral-14b-2512', 'name' => 'Claude Local Sonnet', 'desc' => 'Modèle compact puissant'],
+        ['id' => 'ministral-8b-2512', 'name' => 'Claude Local Haiku', 'desc' => 'All-rounder mobile'],
+        ['id' => 'ministral-3b-2512', 'name' => 'Claude Local Mini', 'desc' => 'Ultra-léger, commande vocale'],
     ],
     'audio' => [
-        ['id' => 'voxtral-small-2507', 'name' => 'Audio Core Small', 'desc' => 'Analyse sémantique audio'],
-        ['id' => 'voxtral-mini-2507', 'name' => 'Audio Core Mini', 'desc' => 'Traitement flux rapide'],
+        ['id' => 'voxtral-small-2507', 'name' => 'Claude Audio Haiku', 'desc' => 'Analyse sémantique audio'],
+        ['id' => 'voxtral-mini-2507', 'name' => 'Claude Audio Mini', 'desc' => 'Traitement flux rapide'],
     ],
+]);
+
+define('MODEL_ALIASES', [
+    'claude-opus-4.5'        => 'mistral-large-2512',
+    'claude-opus-4'          => 'mistral-large-2411',
+    'claude-sonnet-4.5'      => 'mistral-medium-2508',
+    'claude-sonnet-4'        => 'mistral-medium-2505',
+    'claude-haiku-4.5'       => 'mistral-small-2603',
+    'claude-haiku-4'         => 'mistral-small-2506',
+    'claude-code-max'        => 'codestral-2508',
+    'claude-code-opus'       => 'devstral-2512',
+    'claude-code-sonnet'     => 'devstral-medium-2507',
+    'claude-code-haiku'      => 'devstral-small-2507',
+    'claude-agent-sonnet'    => 'magistral-medium-2509',
+    'claude-agent-haiku'     => 'magistral-small-2509',
+    'claude-vision-opus'     => 'pixtral-large-2411',
+    'claude-vision-haiku'    => 'pixtral-12b-2409',
+    'claude-muse'            => 'labs-mistral-small-creative',
+    'claude-local-sonnet'    => 'ministral-14b-2512',
+    'claude-local-haiku'     => 'ministral-8b-2512',
+    'claude-local-mini'      => 'ministral-3b-2512',
+    'claude-audio-haiku'     => 'voxtral-small-2507',
+    'claude-audio-mini'      => 'voxtral-mini-2507',
 ]);
 
 // Modèle par défaut pour chaque rôle
@@ -87,7 +122,7 @@ define('AUTO_LEARNING_ENABLED', true);
 define('LEARNING_THRESHOLD', 0.8);
 
 // Logs
-define('LOG_FILE', DATA_PATH . '/voanh.log');
+define('LOG_FILE', DATA_PATH . '/libre_claude.log');
 define('LOG_LEVEL', 3);
 
 // Créer les dossiers si inexistants (permissions Hostinger)
@@ -105,7 +140,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Logging (cURL safe, pas de exec)
-function voanh_log($message, $level = 3) {
+function libreclaude_log($message, $level = 3) {
     if ($level > LOG_LEVEL) return;
     $levels = [1 => 'ERROR', 2 => 'WARNING', 3 => 'INFO', 4 => 'DEBUG'];
     $entry = '[' . date('Y-m-d H:i:s') . '] [' . ($levels[$level] ?? 'INFO') . '] ' . $message . "\n";
@@ -113,7 +148,7 @@ function voanh_log($message, $level = 3) {
 }
 
 set_exception_handler(function($e) {
-    voanh_log("Exception: " . $e->getMessage(), 1);
+    libreclaude_log("Exception: " . $e->getMessage(), 1);
     if (!headers_sent()) {
         http_response_code(500);
         if (strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false) {

@@ -1,13 +1,14 @@
 <?php
 /**
- * VoAnh - API Chat (Hostinger compatible)
+ * Libre Claude - API Chat (Hostinger compatible)
  * Endpoint: /chat.php (POST JSON)
  */
 
 require_once dirname(__FILE__) . '/config.php';
 require_once dirname(__FILE__) . '/database.php';
 require_once dirname(__FILE__) . '/auth.php';
-require_once dirname(__FILE__) . '/mistral.php';
+require_once dirname(__FILE__) . '/claude.php';
+require_once dirname(__FILE__) . '/memory.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -15,7 +16,7 @@ header('X-Content-Type-Options: nosniff');
 // CORS preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
     exit;
 }
 
@@ -25,12 +26,23 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+$db = Database::getInstance();
+if (!$db->isInstalled()) {
+    echo json_encode(['success' => false, 'setup_required' => true, 'error' => 'Instance non configurée']);
+    exit;
+}
+
 $raw   = file_get_contents('php://input');
 $input = json_decode($raw, true);
 
 $message  = trim($input['message'] ?? '');
 $model    = trim($input['model'] ?? MASTER_AGENT_MODEL);
+$modelAlias = strtolower($model);
+if (defined('MODEL_ALIASES') && isset(MODEL_ALIASES[$modelAlias])) {
+    $model = MODEL_ALIASES[$modelAlias];
+}
 $convId   = isset($input['conversation_id']) ? (int)$input['conversation_id'] : null;
+$useHistory = !isset($input['use_history']) || (bool)$input['use_history'];
 
 if ($message === '') {
     echo json_encode(['success' => false, 'error' => 'Message vide']);
@@ -39,9 +51,11 @@ if ($message === '') {
 
 // Valider le modèle
 $allModels = [];
+$modelNames = [];
 foreach (MISTRAL_MODELS as $cat) {
     foreach ($cat as $m) {
         $allModels[] = $m['id'];
+        $modelNames[$m['id']] = $m['name'];
     }
 }
 if (!in_array($model, $allModels)) {
@@ -50,15 +64,26 @@ if (!in_array($model, $allModels)) {
 
 try {
     $auth   = new Auth();
-    $user   = $auth->getCurrentUser();
+    $bearer = '';
+    if (preg_match('/Bearer\s+(.+)/i', $_SERVER['HTTP_AUTHORIZATION'] ?? '', $m)) {
+        $bearer = trim($m[1]);
+    } elseif (preg_match('/Bearer\s+(.+)/i', $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '', $m)) {
+        $bearer = trim($m[1]);
+    }
+
+    $user   = $bearer ? $auth->getUserByApiToken($bearer) : $auth->getCurrentUser();
+    if ($bearer && !$user) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'error' => 'Clé API Libre Claude invalide']);
+        exit;
+    }
     $userId = $user ? (int)$user['id'] : null;
     $apiKey = $user ? ($user['mistral_api_key'] ?: null) : null;
 
-    $db      = Database::getInstance();
-    $mistral = getMistralClient($apiKey);
+    $claude = getClaudeClient($apiKey);
 
-    // Créer ou récupérer la conversation
-    if (!$convId && $userId) {
+    // Créer ou récupérer la conversation, y compris pour les appels API internes lc_sk_...
+    if (!$convId && $userId && $useHistory) {
         $convId = $db->insert('conversations', [
             'user_id'    => $userId,
             'title'      => mb_substr($message, 0, 60),
@@ -67,7 +92,10 @@ try {
     } elseif ($convId && $userId) {
         // Vérifier que la conversation appartient à l'utilisateur
         $conv = $db->fetch("SELECT id FROM conversations WHERE id = ? AND user_id = ?", [$convId, $userId]);
-        if (!$conv) $convId = null;
+        if (!$conv) {
+            echo json_encode(['success' => false, 'error' => 'Conversation introuvable']);
+            exit;
+        }
     }
 
     // Sauvegarder le message utilisateur
@@ -79,18 +107,26 @@ try {
             'model_used'      => $model,
         ]);
     }
+    if ($userId) {
+        memory_capture_from_message($db, $user, $message, $convId);
+    }
 
     // Construire les messages pour l'API
     $apiMessages = [];
 
     // Système prompt
+    $memoryContext = $userId ? memory_build_context($db, $user) : '';
+    $systemPrompt = "Tu es Libre Claude, un assistant IA avancé basé sur Mistral AI. Tu es intelligent, précis, créatif et bienveillant. Tu réponds toujours en français sauf si l'utilisateur parle une autre langue. Tu peux coder, analyser, créer et planifier des tâches complexes.";
+    if ($memoryContext !== '') {
+        $systemPrompt .= "\n\n" . $memoryContext;
+    }
     $apiMessages[] = [
         'role'    => 'system',
-        'content' => "Tu es VoAnh, un assistant IA avancé basé sur Mistral AI. Tu es intelligent, précis, créatif et bienveillant. Tu réponds toujours en français sauf si l'utilisateur parle une autre langue. Tu peux coder, analyser, créer et planifier des tâches complexes.",
+        'content' => $systemPrompt,
     ];
 
     // Historique de la conversation (max 20 derniers messages)
-    if ($convId) {
+    if ($convId && $useHistory) {
         $history = $db->fetchAll(
             "SELECT role, content FROM messages 
              WHERE conversation_id = ? 
@@ -112,7 +148,7 @@ try {
     }
 
     // Appel Mistral
-    $result = $mistral->chat($apiMessages, $model, [
+    $result = $claude->chat($apiMessages, $model, [
         'temperature' => 0.7,
         'max_tokens'  => 4096,
     ]);
@@ -138,11 +174,12 @@ try {
             'success'         => true,
             'content'         => $reply,
             'model'           => $model,
+            'model_name'      => $modelNames[$model] ?? $model,
             'conversation_id' => $convId,
             'usage'           => $result['usage'] ?? [],
         ]);
     } else {
-        voanh_log("Chat error for user $userId: " . $result['error'], 2);
+        libreclaude_log("Chat error for user $userId: " . $result['error'], 2);
         echo json_encode([
             'success' => false,
             'error'   => $result['error'] ?? 'Erreur de l\'API Mistral',
@@ -150,6 +187,6 @@ try {
     }
 
 } catch (Exception $e) {
-    voanh_log("Chat exception: " . $e->getMessage(), 1);
+    libreclaude_log("Chat exception: " . $e->getMessage(), 1);
     echo json_encode(['success' => false, 'error' => 'Erreur interne du serveur']);
 }

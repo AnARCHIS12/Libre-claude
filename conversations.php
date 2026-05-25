@@ -1,6 +1,6 @@
 <?php
 /**
- * VoAnh - API Conversations (liste + détail)
+ * Libre Claude - API Conversations (liste + détail)
  */
 
 require_once dirname(__FILE__) . '/config.php';
@@ -9,6 +9,12 @@ require_once dirname(__FILE__) . '/auth.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+$db = Database::getInstance();
+if (!$db->isInstalled()) {
+    echo json_encode(['success' => false, 'setup_required' => true, 'error' => 'Instance non configurée']);
+    exit;
+}
+
 $auth = new Auth();
 if (!$auth->isAuthenticated()) {
     echo json_encode(['success' => false, 'error' => 'Non authentifié']);
@@ -16,7 +22,6 @@ if (!$auth->isAuthenticated()) {
 }
 
 $user = $auth->getCurrentUser();
-$db   = Database::getInstance();
 
 $action = $_GET['action'] ?? 'list';
 

@@ -1,0 +1,11 @@
+.git
+.gitignore
+data
+sandbox
+*.sqlite
+*.sqlite-*
+*.log
+.env
+Dockerfile
+docker-compose.yml
+

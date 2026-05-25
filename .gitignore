@@ -1,0 +1,7 @@
+/.env
+/data/
+/sandbox/
+*.sqlite
+*.sqlite3
+*.db
+*.log
