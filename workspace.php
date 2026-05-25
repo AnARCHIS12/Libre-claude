@@ -598,6 +598,7 @@ label{display:block;font-size:12px;color:var(--muted);margin:12px 0 7px}
 .top-actions{position:absolute;right:18px;top:10px;z-index:5}
 .coder-shell{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:44px 40px 64px}
 .coder-shell.coder-active{display:grid;grid-template-columns:minmax(360px,42%) minmax(0,58%);align-items:stretch;justify-content:stretch;height:100vh;min-height:720px;padding:0}
+.coder-shell.environment-open:not(.coder-active){flex-direction:column;align-items:center;justify-content:flex-start;padding-top:82px}
 .coder-chat{display:flex;flex-direction:column;gap:16px;min-width:0;width:min(800px,100%);color:var(--text)}
 .coder-shell.coder-active .coder-chat{width:auto;padding:52px 20px 18px;background:#0b0b12;border-right:1px solid var(--line)}
 .coder-chat h1{font-size:34px;line-height:1.1;color:var(--text);margin:0;text-align:center}
@@ -626,6 +627,7 @@ select,.branch-input,input,textarea{background:#0d0d15;color:var(--text);border-
 .coder-shell.coder-active .quick{justify-content:flex-start;margin-top:0;gap:8px}
 .chip{background:#0d0d15;color:var(--text);border-color:var(--line)}
 .coder-code-panel{min-width:0;padding:48px 18px 18px;background:#09090f;color:var(--text);overflow:auto}
+.coder-shell:not(.coder-active):not(.environment-open) .coder-code-panel{display:none}
 .coder-shell:not(.coder-active) .coder-code-panel{width:min(1040px,100%);padding:0;margin-top:34px;background:transparent;overflow:visible}
 .coder-code-panel .workspace-tabs{width:100%;margin:0 0 10px;justify-content:center}
 .coder-code-panel .workspace-tab{background:#0d0d15;color:var(--text);border-color:var(--line);padding:7px 14px}
@@ -1071,6 +1073,8 @@ function publishGenerated() {
 }
 
 function setWorkspaceTab(name) {
+  const shell = document.querySelector('.coder-shell');
+  if (shell && name === 'settings') shell.classList.add('environment-open');
   document.querySelectorAll('[data-workspace-tab]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.workspaceTab === name);
   });
