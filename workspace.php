@@ -1014,12 +1014,125 @@ select,.branch-input,input,textarea{background:#0d0d15;color:var(--text);border-
 </div>
 
 <script>
+function previewEscapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"]/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+  }[c]));
+}
+
+function previewInlineMarkdown(value) {
+  let html = previewEscapeHtml(value);
+  html = html.replace(/\[!\[([^\]]*)\]\(((?:https?:\/\/|\.?\/|[A-Za-z0-9_.-])[^)\s]*)\)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$3" target="_blank" rel="noopener noreferrer"><img src="$2" alt="$1"></a>');
+  html = html.replace(/!\[([^\]]*)\]\(((?:https?:\/\/|\.?\/|[A-Za-z0-9_.-])[^)\s]*)\)/g, '<img src="$2" alt="$1">');
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  return html;
+}
+
+function markdownToHtml(markdown) {
+  const lines = String(markdown || '').replace(/\r\n/g, '\n').split('\n');
+  let html = '';
+  let listType = '';
+  let inCode = false;
+  let codeLang = '';
+  let codeLines = [];
+
+  function closeList() {
+    if (!listType) return;
+    html += '</' + listType + '>';
+    listType = '';
+  }
+
+  function openList(type) {
+    if (listType === type) return;
+    closeList();
+    listType = type;
+    html += '<' + type + '>';
+  }
+
+  function closeCode() {
+    html += '<pre><code class="language-' + previewEscapeHtml(codeLang) + '">' + previewEscapeHtml(codeLines.join('\n')) + '</code></pre>';
+    inCode = false;
+    codeLang = '';
+    codeLines = [];
+  }
+
+  lines.forEach(line => {
+    const fence = line.match(/^```([A-Za-z0-9_-]*)\s*$/);
+    if (fence) {
+      if (inCode) {
+        closeCode();
+      } else {
+        closeList();
+        inCode = true;
+        codeLang = fence[1] || '';
+        codeLines = [];
+      }
+      return;
+    }
+
+    if (inCode) {
+      codeLines.push(line);
+      return;
+    }
+
+    if (!line.trim()) {
+      closeList();
+      return;
+    }
+
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      html += '<h' + level + '>' + previewInlineMarkdown(heading[2]) + '</h' + level + '>';
+      return;
+    }
+
+    const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+    if (unordered) {
+      openList('ul');
+      html += '<li>' + previewInlineMarkdown(unordered[1]) + '</li>';
+      return;
+    }
+
+    const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+    if (ordered) {
+      openList('ol');
+      html += '<li>' + previewInlineMarkdown(ordered[1]) + '</li>';
+      return;
+    }
+
+    const quote = line.match(/^>\s?(.+)$/);
+    if (quote) {
+      closeList();
+      html += '<blockquote>' + previewInlineMarkdown(quote[1]) + '</blockquote>';
+      return;
+    }
+
+    closeList();
+    html += '<p>' + previewInlineMarkdown(line) + '</p>';
+  });
+
+  if (inCode) closeCode();
+  closeList();
+  return html || '<p></p>';
+}
+
 function buildPreviewDoc(lang, code) {
   lang = String(lang || '').toLowerCase();
   if (lang === 'html' || lang === 'svg') return code;
   if (lang === 'css') return '<!doctype html><html><head><style>' + code + '</style></head><body><main class="preview-root"><?= htmlspecialchars($t('css_preview_label')) ?></main></body></html>';
   if (lang === 'js' || lang === 'javascript') return '<!doctype html><html><body><main id="app"></main><script>' + code.replace(/<\/script/gi, '<\\/script') + '<\/script></body></html>';
-  return '<!doctype html><html><body><pre>' + String(code).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</pre></body></html>';
+  if (lang === 'md' || lang === 'markdown') {
+    return '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#fff;color:#17151f;font:16px/1.65 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.markdown{max-width:920px;margin:0 auto;padding:34px 38px}h1,h2,h3,h4,h5,h6{line-height:1.18;margin:1.25em 0 .55em;color:#11101a}h1{font-size:2.15rem;border-bottom:1px solid #e6e2ec;padding-bottom:.35em}h2{font-size:1.55rem;border-bottom:1px solid #eeeaf3;padding-bottom:.3em}p,ul,ol,blockquote,pre{margin:0 0 1rem}ul,ol{padding-left:1.45rem}li+li{margin-top:.25rem}a{color:#d6112a;text-decoration:none}a:hover{text-decoration:underline}code{background:#f3f1f6;border:1px solid #e2deea;border-radius:6px;padding:.12em .35em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}pre{background:#11111a;color:#f2f0f6;border-radius:12px;padding:16px;overflow:auto}pre code{background:transparent;border:0;color:inherit;padding:0}blockquote{border-left:4px solid #e6122a;background:#faf7fa;padding:10px 14px;color:#4f4b5c}img{max-width:100%;height:auto;border-radius:10px}</style></head><body><article class="markdown">' + markdownToHtml(code) + '</article></body></html>';
+  }
+  return '<!doctype html><html><body><pre>' + previewEscapeHtml(code) + '</pre></body></html>';
 }
 function toggleWorkspaceSidebar() {
   const app = document.querySelector('.app');
@@ -1067,6 +1180,7 @@ function parseGeneratedFiles() {
 function fileKind(path) {
   const ext = String(path || '').split('.').pop().toLowerCase();
   if (ext === 'html' || ext === 'htm') return 'html';
+  if (ext === 'md' || ext === 'markdown') return 'markdown';
   if (ext === 'css') return 'css';
   if (ext === 'js' || ext === 'mjs') return 'javascript';
   if (ext === 'svg') return 'svg';
