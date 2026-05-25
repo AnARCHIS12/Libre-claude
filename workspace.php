@@ -347,7 +347,11 @@ $oauthEnabled = GITHUB_OAUTH_CLIENT_ID !== '' && GITHUB_OAUTH_CLIENT_SECRET !== 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'connect';
 
-    if ($action === 'connect') {
+    if ($action === 'disconnect_github') {
+        $db->delete('workspace_github', 'user_id = ?', [$user['id']]);
+        $github = null;
+        $success = $t('github_disconnected');
+    } elseif ($action === 'connect') {
         $repoUrl = trim($_POST['repo_url'] ?? '');
         if ($repoUrl === '' && !empty($_POST['repo_full_name'])) $repoUrl = trim($_POST['repo_full_name']);
         $branch = trim($_POST['branch'] ?? 'main') ?: 'main';
@@ -889,6 +893,16 @@ select,.branch-input,input,textarea{background:#0d0d15;color:var(--text);border-
       <div class="card">
         <h2><?= htmlspecialchars($t('connect_github')) ?></h2>
         <p class="hint"><?= htmlspecialchars($t('github_oauth_hint')) ?></p>
+        <?php if ($github && !empty($github['token'])): ?>
+        <div class="msg ok">
+          <?= htmlspecialchars($t('github_connected_as')) ?>
+          <?= htmlspecialchars(trim(($github['owner'] ?? '') . '/' . ($github['repo'] ?? ''), '/')) ?>
+        </div>
+        <form method="POST" onsubmit="return confirm(<?= htmlspecialchars(json_encode($t('github_disconnect_confirm')), ENT_QUOTES) ?>)">
+          <input type="hidden" name="action" value="disconnect_github">
+          <button class="btn" type="submit"><i class="fa-solid fa-link-slash"></i><?= htmlspecialchars($t('disconnect_github')) ?></button>
+        </form>
+        <?php endif; ?>
         <?php if ($oauthEnabled): ?>
         <p style="margin:12px 0"><a class="btn primary" href="github_oauth.php"><i class="fa-brands fa-github"></i><?= htmlspecialchars($t('github_oauth')) ?></a></p>
         <?php else: ?>
