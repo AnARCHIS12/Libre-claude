@@ -13,6 +13,7 @@
   <img alt="Docker" src="https://img.shields.io/docker/v/liberchat/libre-claude/latest?style=for-the-badge&logo=docker&label=Docker">
   <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/liberchat/libre-claude?style=for-the-badge&logo=docker&logoColor=white">
   <img alt="Langues" src="https://img.shields.io/badge/FR%20EN%20ES%20DE%20IT-multilingue-e6122a?style=for-the-badge">
+  <img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-e6122a?style=for-the-badge">
 </p>
 
 ---
@@ -76,7 +77,7 @@ Le projet utilise PHP pur, SQLite, cURL et des modèles affichés dans l'interfa
 
 Libre Claude peut aussi tourner dans une image Docker Apache + PHP.
 
-### Installation one-line
+### Installation one-line interactive
 
 Installation moderne depuis GitHub avec `curl` :
 
@@ -84,31 +85,128 @@ Installation moderne depuis GitHub avec `curl` :
 curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | sh
 ```
 
+Le script lance un assistant interactif :
+
+```text
+Dossier d'installation [/home/user/libre-claude]:
+Port web local [8173]:
+Image Docker [liberchat/libre-claude:latest]:
+Configurer GitHub OAuth maintenant ? [o/N]
+Lancer Libre Claude après l'installation ? [O/n]
+Continuer ? [O/n]
+```
+
+Si Docker est absent, l'installateur propose de l'installer automatiquement :
+
+- Linux : installation de Docker Engine via le script officiel Docker, activation du service et ajout de l'utilisateur au groupe `docker` si possible.
+- macOS : installation de Docker Desktop via Homebrew si `brew` est disponible.
+- Le `PATH` est corrigé automatiquement quand Docker existe dans un chemin standard.
+
 Version avec URL GitHub classique :
 
 ```bash
 curl -fsSL https://github.com/AnARCHIS12/Libre-claude/raw/main/install.sh | sh
 ```
 
-Changer le port :
+Afficher l'aide :
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | LIBRE_CLAUDE_PORT=8080 sh
+curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | sh -s -- --help
+```
+
+Changer le port sans passer par les questions :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | sh -s -- --port 8080
 ```
 
 Installer dans un dossier précis :
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | LIBRE_CLAUDE_DIR=/opt/libre-claude sh
+curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | sh -s -- --dir /opt/libre-claude
+```
+
+Installation automatique sans interaction :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | \
+  LIBRE_CLAUDE_YES=1 \
+  LIBRE_CLAUDE_PORT=8080 \
+  sh
+```
+
+Préparer les fichiers sans démarrer Docker :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | sh -s -- --no-start
+```
+
+Refuser l'installation automatique de Docker :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | sh -s -- --no-install-docker
 ```
 
 Avec OAuth GitHub dès l'installation :
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.sh | \
+  LIBRE_CLAUDE_YES=1 \
   GITHUB_OAUTH_CLIENT_ID=votre_client_id \
   GITHUB_OAUTH_CLIENT_SECRET=votre_client_secret \
   sh
+```
+
+### Installation Windows PowerShell
+
+Depuis PowerShell, lancez l'installateur interactif Windows :
+
+```powershell
+irm https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.ps1 | iex
+```
+
+Le script demande :
+
+```text
+Dossier d'installation [C:\Users\vous\libre-claude]
+Port web local [8173]
+Image Docker [liberchat/libre-claude:latest]
+Configurer GitHub OAuth maintenant ? [o/N]
+Lancer Libre Claude après l'installation ? [O/n]
+Continuer ? [O/n]
+```
+
+Si Docker Desktop est absent, le script peut l'installer avec `winget`, ajouter Docker au `PATH` utilisateur, puis lancer Docker Desktop.
+
+Avec options, téléchargez puis lancez le script :
+
+```powershell
+irm https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Port 8080 -Dir "$env:USERPROFILE\LibreClaude"
+```
+
+Installation automatique sans questions :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Yes -Port 8080
+```
+
+Refuser l'installation automatique de Docker Desktop :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoInstallDocker
+```
+
+Préparer les fichiers sans démarrer Docker :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoStart
+```
+
+Tester la configuration sans rien écrire :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -DryRun -Yes
 ```
 
 Le script crée :
@@ -338,11 +436,13 @@ votre-domaine.com/
 ├── claude.php                        Client API Claude
 ├── github_oauth.php                  Callback OAuth GitHub
 ├── install.sh                        Installateur one-line curl
+├── install.ps1                       Installateur Windows PowerShell
 ├── Dockerfile                        Image Docker Apache + PHP
 ├── docker-entrypoint.sh              Préparation permissions Docker
 ├── docker-compose.yml                Lancement Docker local
 ├── docker-compose.prod.yml           Lancement production avec image publiée
 ├── .env.example                      Variables Docker exemple
+├── LICENSE                           Licence MIT
 ├── libre-claude-red-black-dark.png   Logo sombre
 ├── libre-claude-red-black.png        Logo clair
 ├── libre-claude-icon.png             Icône / favicon
@@ -423,4 +523,6 @@ mv data/voanh.log data/libre_claude.log
 
 ## Licence
 
-Projet privé ou interne par défaut. Ajoutez un fichier `LICENSE` si vous souhaitez publier Libre Claude sous une licence open source.
+Libre Claude est distribué sous licence **MIT**.
+
+Vous pouvez l'utiliser, le modifier, le redistribuer et l'auto-héberger librement, à condition de conserver la notice de licence. Voir le fichier [LICENSE](LICENSE).
