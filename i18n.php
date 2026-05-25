@@ -237,6 +237,19 @@ define('I18N', [
         'required_suffix' => 'requis',
         'bytes' => 'octets',
         'css_preview_label' => 'Aperçu CSS',
+        'chat_libre' => 'Chat Libre Claude',
+        'libre_coder' => 'Libre Claude Coder',
+        'ai_coder_title' => 'Coder avec l IA',
+        'ai_coder_sub' => 'Demandez une modification. Libre Claude lit le contexte choisi et prépare un commit multi-fichiers.',
+        'ai_coder_prompt' => 'Demande de code',
+        'ai_context_files' => 'Fichiers de contexte',
+        'ai_context_hint' => 'Un chemin par ligne, par exemple index.php ou assets/app.css. Laissez vide pour utiliser seulement l arborescence.',
+        'ai_coder_run' => 'Générer les modifications',
+        'ai_coder_ready' => 'Modifications générées. Relisez puis publiez le commit.',
+        'ai_coder_error' => 'Impossible de générer les modifications.',
+        'ai_coder_prompt_required' => 'Décrivez la modification à coder.',
+        'ai_raw_reply' => 'Réponse brute IA',
+        'review_generated_files' => 'Fichiers générés à relire',
         'multi_file_commit' => 'Commit multi-fichiers',
         'multi_file_payload' => 'Fichiers à envoyer',
         'multi_file_hint' => 'Collez un tableau JSON : [{"path":"index.html","content":"..."}]. Tous les fichiers seront publiés dans un seul commit.',
@@ -334,18 +347,22 @@ function i18n_extend_base($lang) {
         'en' => [
             'memory_title' => 'Memory', 'memory_sub' => 'Libre Claude keeps useful information to better understand your conversations and workspaces.', 'memory_enabled' => 'Automatic memory', 'auto_memory_hint' => 'Remembers preferences, projects, and durable information detected in your messages.', 'workspace_context_enabled' => 'Workspace context', 'workspace_context_hint' => 'Automatically adds the connected GitHub repository and recent blocks to the chat context.', 'memory_saved' => 'Memory settings saved.', 'memory_deleted' => 'Memory deleted.', 'memory_list' => 'Saved memories', 'memory_general' => 'General', 'no_memory' => 'No saved memory yet.', 'delete_memory_confirm' => 'Delete this memory?',
             'my_workspaces' => 'Workspaces', 'new_workspace' => 'New workspace', 'no_workspace' => 'No workspace', 'workspace_empty_hint' => 'Connect GitHub to start', 'saved_blocks_short' => 'blocks',
+            'chat_libre' => 'Libre Claude Chat', 'libre_coder' => 'Libre Claude Coder', 'ai_coder_title' => 'Code with AI', 'ai_coder_sub' => 'Ask for a change. Libre Claude reads the selected context and prepares a multi-file commit.', 'ai_coder_prompt' => 'Coding request', 'ai_context_files' => 'Context files', 'ai_context_hint' => 'One path per line, for example index.php or assets/app.css. Leave empty to use only the tree.', 'ai_coder_run' => 'Generate changes', 'ai_coder_ready' => 'Changes generated. Review, then publish the commit.', 'ai_coder_error' => 'Unable to generate changes.', 'ai_coder_prompt_required' => 'Describe the change to code.', 'ai_raw_reply' => 'Raw AI reply', 'review_generated_files' => 'Generated files to review',
         ],
         'es' => [
             'memory_title' => 'Memoria', 'memory_sub' => 'Libre Claude guarda información útil para entender mejor tus conversaciones y workspaces.', 'memory_enabled' => 'Memoria automática', 'auto_memory_hint' => 'Recuerda preferencias, proyectos e información duradera detectada en tus mensajes.', 'workspace_context_enabled' => 'Contexto de workspace', 'workspace_context_hint' => 'Añade automáticamente el repositorio GitHub conectado y los bloques recientes al contexto del chat.', 'memory_saved' => 'Ajustes de memoria guardados.', 'memory_deleted' => 'Recuerdo eliminado.', 'memory_list' => 'Recuerdos guardados', 'memory_general' => 'General', 'no_memory' => 'Aún no hay recuerdos guardados.', 'delete_memory_confirm' => '¿Eliminar este recuerdo?',
             'my_workspaces' => 'Workspaces', 'new_workspace' => 'Nuevo workspace', 'no_workspace' => 'Sin workspace', 'workspace_empty_hint' => 'Conecta GitHub para empezar', 'saved_blocks_short' => 'bloques',
+            'chat_libre' => 'Chat Libre Claude', 'libre_coder' => 'Libre Claude Coder', 'ai_coder_title' => 'Programar con IA', 'ai_coder_sub' => 'Pide un cambio. Libre Claude lee el contexto elegido y prepara un commit de varios archivos.', 'ai_coder_prompt' => 'Solicitud de código', 'ai_context_files' => 'Archivos de contexto', 'ai_context_hint' => 'Una ruta por línea. Déjalo vacío para usar solo el árbol.', 'ai_coder_run' => 'Generar cambios', 'ai_coder_ready' => 'Cambios generados. Revísalos y publica el commit.', 'ai_coder_error' => 'No se pudieron generar los cambios.', 'ai_coder_prompt_required' => 'Describe el cambio a programar.', 'ai_raw_reply' => 'Respuesta IA bruta', 'review_generated_files' => 'Archivos generados para revisar',
         ],
         'de' => [
             'memory_title' => 'Speicher', 'memory_sub' => 'Libre Claude merkt sich nützliche Informationen, um Gespräche und Workspaces besser zu verstehen.', 'memory_enabled' => 'Automatischer Speicher', 'auto_memory_hint' => 'Merkt sich Vorlieben, Projekte und dauerhafte Informationen aus deinen Nachrichten.', 'workspace_context_enabled' => 'Workspace-Kontext', 'workspace_context_hint' => 'Fügt das verbundene GitHub-Repository und aktuelle Blöcke automatisch zum Chat-Kontext hinzu.', 'memory_saved' => 'Speichereinstellungen gespeichert.', 'memory_deleted' => 'Erinnerung gelöscht.', 'memory_list' => 'Gespeicherte Erinnerungen', 'memory_general' => 'Allgemein', 'no_memory' => 'Noch keine Erinnerung gespeichert.', 'delete_memory_confirm' => 'Diese Erinnerung löschen?',
             'my_workspaces' => 'Workspaces', 'new_workspace' => 'Neuer Workspace', 'no_workspace' => 'Kein Workspace', 'workspace_empty_hint' => 'GitHub verbinden, um zu starten', 'saved_blocks_short' => 'Blöcke',
+            'chat_libre' => 'Libre Claude Chat', 'libre_coder' => 'Libre Claude Coder', 'ai_coder_title' => 'Mit KI coden', 'ai_coder_sub' => 'Fordere eine Änderung an. Libre Claude liest den gewählten Kontext und bereitet einen Multi-Datei-Commit vor.', 'ai_coder_prompt' => 'Code-Anfrage', 'ai_context_files' => 'Kontextdateien', 'ai_context_hint' => 'Ein Pfad pro Zeile. Leer lassen, um nur den Baum zu nutzen.', 'ai_coder_run' => 'Änderungen generieren', 'ai_coder_ready' => 'Änderungen generiert. Prüfen und committen.', 'ai_coder_error' => 'Änderungen konnten nicht generiert werden.', 'ai_coder_prompt_required' => 'Beschreibe die Code-Änderung.', 'ai_raw_reply' => 'Rohe KI-Antwort', 'review_generated_files' => 'Generierte Dateien prüfen',
         ],
         'it' => [
             'memory_title' => 'Memoria', 'memory_sub' => 'Libre Claude conserva informazioni utili per capire meglio conversazioni e workspace.', 'memory_enabled' => 'Memoria automatica', 'auto_memory_hint' => 'Ricorda preferenze, progetti e informazioni durature rilevate nei messaggi.', 'workspace_context_enabled' => 'Contesto workspace', 'workspace_context_hint' => 'Aggiunge automaticamente il repository GitHub connesso e i blocchi recenti al contesto della chat.', 'memory_saved' => 'Impostazioni memoria salvate.', 'memory_deleted' => 'Ricordo eliminato.', 'memory_list' => 'Ricordi salvati', 'memory_general' => 'Generale', 'no_memory' => 'Nessun ricordo salvato per ora.', 'delete_memory_confirm' => 'Eliminare questo ricordo?',
             'my_workspaces' => 'Workspaces', 'new_workspace' => 'Nuovo workspace', 'no_workspace' => 'Nessun workspace', 'workspace_empty_hint' => 'Connetti GitHub per iniziare', 'saved_blocks_short' => 'blocchi',
+            'chat_libre' => 'Chat Libre Claude', 'libre_coder' => 'Libre Claude Coder', 'ai_coder_title' => 'Programmare con IA', 'ai_coder_sub' => 'Chiedi una modifica. Libre Claude legge il contesto scelto e prepara un commit multi-file.', 'ai_coder_prompt' => 'Richiesta di codice', 'ai_context_files' => 'File di contesto', 'ai_context_hint' => 'Un percorso per riga. Lascia vuoto per usare solo l albero.', 'ai_coder_run' => 'Genera modifiche', 'ai_coder_ready' => 'Modifiche generate. Rivedi e pubblica il commit.', 'ai_coder_error' => 'Impossibile generare le modifiche.', 'ai_coder_prompt_required' => 'Descrivi la modifica da codificare.', 'ai_raw_reply' => 'Risposta IA grezza', 'review_generated_files' => 'File generati da rivedere',
         ],
     ];
     return array_merge(I18N['fr'], $sets[$lang] ?? [], $extra[$lang] ?? []);

@@ -6,6 +6,7 @@ require_once dirname(__FILE__) . '/config.php';
 require_once dirname(__FILE__) . '/auth.php';
 require_once dirname(__FILE__) . '/database.php';
 require_once dirname(__FILE__) . '/i18n.php';
+require_once dirname(__FILE__) . '/claude.php';
 
 $db = Database::getInstance();
 if (!$db->isInstalled()) {
@@ -24,6 +25,10 @@ $lang = current_language($user);
 $t = fn($key) => t($key, $lang);
 $success = '';
 $error = '';
+$aiPrompt = '';
+$aiContextPaths = '';
+$aiFilesDraft = '';
+$aiCodeReply = '';
 $githubOauthErrorDetail = '';
 if (!empty($_GET['github_error']) && !empty($_SESSION['github_oauth_error_detail'])) {
     $githubOauthErrorDetail = (string) $_SESSION['github_oauth_error_detail'];
@@ -143,6 +148,86 @@ function github_user_repos($token, &$error) {
     return $data;
 }
 
+function workspace_extract_json_array($text) {
+    $text = trim($text);
+    if ($text === '') return null;
+
+    if (preg_match('/```(?:json)?\s*(\[.*?\])\s*```/is', $text, $m)) {
+        $decoded = json_decode($m[1], true);
+        if (is_array($decoded)) return $decoded;
+    }
+
+    $decoded = json_decode($text, true);
+    if (is_array($decoded)) return $decoded;
+
+    $start = strpos($text, '[');
+    $end = strrpos($text, ']');
+    if ($start !== false && $end !== false && $end > $start) {
+        $decoded = json_decode(substr($text, $start, $end - $start + 1), true);
+        if (is_array($decoded)) return $decoded;
+    }
+
+    return null;
+}
+
+function workspace_ai_code($instruction, $contextFiles, $repoFiles, $user, &$rawReply, &$error) {
+    $treeLines = [];
+    foreach (array_slice($repoFiles, 0, 120) as $item) {
+        $treeLines[] = '- ' . ($item['path'] ?? '');
+    }
+
+    $context = '';
+    foreach ($contextFiles as $file) {
+        $content = (string)($file['content'] ?? '');
+        if (strlen($content) > 18000) {
+            $content = substr($content, 0, 18000) . "\n/* tronque */";
+        }
+        $context .= "\n\n--- FILE: " . ($file['path'] ?? 'unknown') . " ---\n" . $content;
+    }
+
+    $system = "Tu es Libre Claude Coder, un agent de code integre a Libre Claude. Tu modifies un depot GitHub en proposant des fichiers complets ou nouveaux fichiers. Reponds uniquement avec un JSON valide, sans markdown, sous forme de tableau. Chaque entree doit avoir exactement: path, content. N'invente pas de fichiers inutiles. Respecte la demande utilisateur.";
+    $userPrompt = "Depot connecte. Arborescence disponible:\n" . implode("\n", $treeLines)
+        . "\n\nFichiers fournis en contexte:" . ($context ?: "\nAucun fichier complet fourni.")
+        . "\n\nDemande utilisateur:\n" . $instruction
+        . "\n\nRetour attendu: JSON array strict [{\"path\":\"...\",\"content\":\"...\"}].";
+
+    $client = getClaudeClient($user['mistral_api_key'] ?? null);
+    $result = $client->chat([
+        ['role' => 'system', 'content' => $system],
+        ['role' => 'user', 'content' => $userPrompt],
+    ], defined('MASTER_AGENT_MODEL') ? MASTER_AGENT_MODEL : 'mistral-large-2512', [
+        'temperature' => 0.25,
+        'max_tokens' => 8192,
+    ]);
+
+    if (empty($result['success'])) {
+        $error = $result['error'] ?? 'Generation IA impossible.';
+        return null;
+    }
+
+    $rawReply = trim($result['content'] ?? '');
+    $files = workspace_extract_json_array($rawReply);
+    if (!is_array($files)) {
+        $error = 'La reponse IA ne contient pas de JSON multi-fichiers valide.';
+        return null;
+    }
+
+    $clean = [];
+    foreach ($files as $file) {
+        if (!is_array($file)) continue;
+        $path = trim($file['path'] ?? '');
+        if ($path === '' || !array_key_exists('content', $file)) continue;
+        $clean[] = ['path' => $path, 'content' => (string)$file['content']];
+    }
+
+    if (!$clean) {
+        $error = 'Aucun fichier exploitable genere par l IA.';
+        return null;
+    }
+
+    return $clean;
+}
+
 function github_commit_files($owner, $repo, $branch, $files, $message, $token, &$error) {
     $branch = $branch ?: 'main';
     $refUrl = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
@@ -248,6 +333,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 $success = $t('repo_created');
                 $github = $db->fetch("SELECT * FROM workspace_github WHERE user_id = ?", [$user['id']]);
+            }
+        }
+    } elseif ($action === 'ai_code') {
+        $aiPrompt = trim($_POST['ai_prompt'] ?? '');
+        $aiContextPaths = trim($_POST['ai_context_paths'] ?? '');
+        $selectedRepo = trim($_POST['repo_full_name'] ?? '');
+        $selectedBranch = trim($_POST['branch'] ?? ($github['branch'] ?? 'main')) ?: 'main';
+        if ($selectedRepo !== '') {
+            $parsedRepo = parse_github_repo($selectedRepo);
+            if ($parsedRepo) {
+                [$owner, $repo] = $parsedRepo;
+                $db->query(
+                    "INSERT OR REPLACE INTO workspace_github (user_id, repo_url, owner, repo, branch, token, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                    [$user['id'], $selectedRepo, $owner, $repo, $selectedBranch, $github['token'] ?? '']
+                );
+                $github = $db->fetch("SELECT * FROM workspace_github WHERE user_id = ?", [$user['id']]);
+            }
+        }
+
+        if (!$github || empty($github['owner']) || empty($github['repo'])) {
+            $error = $t('no_repo_connected');
+        } elseif (empty($github['token'])) {
+            $error = $t('github_token_required');
+        } elseif ($aiPrompt === '') {
+            $error = $t('ai_coder_prompt_required');
+        } else {
+            $contextFiles = [];
+            $paths = array_values(array_filter(array_map('trim', preg_split('/[\r\n,]+/', $aiContextPaths))));
+            foreach (array_slice($paths, 0, 8) as $path) {
+                $ctxError = '';
+                $file = github_get_file($github['owner'], $github['repo'], $github['branch'], $path, $github['token'], $ctxError);
+                if ($file) $contextFiles[] = $file;
+            }
+
+            $apiError = '';
+            $aiRepoFiles = github_tree($github['owner'], $github['repo'], $github['branch'], $github['token'], $apiError);
+            $rawReply = '';
+            $generated = workspace_ai_code($aiPrompt, $contextFiles, $aiRepoFiles, $user, $rawReply, $apiError);
+            $aiCodeReply = $rawReply;
+            if (!$generated) {
+                $error = $t('ai_coder_error') . ' ' . $apiError;
+            } else {
+                $aiFilesDraft = json_encode($generated, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $success = $t('ai_coder_ready');
             }
         }
     } elseif ($action === 'save_file') {
@@ -357,212 +487,315 @@ if ($github && !empty($github['owner']) && !empty($github['repo']) && $selectedP
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0a0f;--card:#13131a;--surface:#181824;--border:#252538;--text:#e8e6f0;--muted:#858298;--accent:#e6122a;--accent2:#ff3b4f;--err:#f87171;--success:#4ade80}
-body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh;padding:36px 20px}
-body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 50% -10%,rgba(230,18,42,.13),transparent);pointer-events:none}
-.wrap{max-width:1120px;margin:0 auto;position:relative;z-index:1}
-.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:28px}
-.logo{width:250px;max-width:56vw;height:auto}
-.back{color:var(--muted);text-decoration:none;font-size:14px}
-.back:hover{color:var(--text)}
-h1{font-family:Georgia,"Times New Roman",serif;font-size:32px;margin-bottom:8px}
-.sub{color:var(--muted);line-height:1.5;margin-bottom:24px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:18px}
-.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:16px}
-label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:7px}
-input,textarea,select{width:100%;padding:12px 14px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:14px;margin-bottom:12px;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-textarea{min-height:360px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.55}
-select option{background:#13131a;color:var(--text)}
-input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
-input[type="checkbox"]{width:auto;margin:0 8px 0 0}
-.hint{font-size:12px;color:var(--muted);margin-top:-5px;margin-bottom:12px}
-.btn{padding:11px 15px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;font-weight:650;cursor:pointer;text-decoration:none;display:inline-flex;gap:8px;align-items:center}
-.btn.secondary{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text)}
-.msg{padding:12px 14px;border-radius:9px;font-size:13.5px;margin-bottom:16px}
+:root{--bg:#09090f;--sidebar:#0f0f18;--panel:#151520;--card:#11111a;--line:#282838;--text:#f2f0f6;--muted:#8d899d;--soft:#1c1c29;--brand:#e6122a;--brand2:#ff3b4f;--err:#ff8a8a;--success:#4ade80;--shadow:0 22px 70px rgba(0,0,0,.38)}
+body{background:radial-gradient(ellipse 55% 35% at 55% -12%,rgba(230,18,42,.17),transparent),var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+button,input,textarea,select{font:inherit}
+.app{display:grid;grid-template-columns:260px 1fr;min-height:100vh;transition:grid-template-columns .18s ease}
+.app.sidebar-collapsed{grid-template-columns:72px 1fr}
+.side{background:var(--sidebar);border-right:1px solid var(--line);padding:18px 16px;display:flex;flex-direction:column;gap:22px}
+.app.sidebar-collapsed .side{padding-left:14px;padding-right:14px}
+.side-top{display:flex;align-items:center;justify-content:space-between}
+.mark{width:32px;height:32px;border-radius:8px;display:block;object-fit:contain}
+.side-toggle{border:0;background:transparent;color:var(--text);font-size:17px}
+.app.sidebar-collapsed .side-top{flex-direction:column;gap:14px;justify-content:flex-start}
+.app.sidebar-collapsed .mark{width:34px;height:34px}
+.app.sidebar-collapsed .side-toggle{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:rgba(255,255,255,.04)}
+.side-link,.task{display:flex;align-items:center;gap:11px;color:var(--text);text-decoration:none;border-radius:10px;padding:9px 7px;font-size:14px}
+.side-link:hover,.task:hover{background:var(--soft)}
+.side-section{display:flex;flex-direction:column;gap:8px}
+.section-head{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:12px;margin:12px 7px 6px}
+.task{align-items:flex-start}
+.task i{margin-top:2px;color:var(--brand)}
+.task-title{display:block;font-size:14px}
+.task-meta{display:block;color:var(--muted);font-size:12px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.app.sidebar-collapsed .side-link{justify-content:center;padding-left:0;padding-right:0}
+.app.sidebar-collapsed .side-link i,.app.sidebar-collapsed .task i{margin:0}
+.app.sidebar-collapsed .side-link{font-size:0;gap:0}
+.app.sidebar-collapsed .side-link i{font-size:15px}
+.app.sidebar-collapsed .section-head span,.app.sidebar-collapsed .section-head i,.app.sidebar-collapsed .task span,.app.sidebar-collapsed .user-pill span:not(.avatar){display:none}
+.app.sidebar-collapsed .task{justify-content:center;padding-left:0;padding-right:0}
+.app.sidebar-collapsed .user-pill{justify-content:center}
+.side-spacer{flex:1}
+.user-pill{display:flex;align-items:center;gap:10px;font-weight:650}
+.avatar{width:28px;height:28px;border-radius:999px;background:var(--brand);color:white;display:grid;place-items:center;font-size:13px}
+.main{position:relative;display:flex;flex-direction:column;align-items:center;padding:44px 40px 64px}
+.top-actions{position:absolute;right:22px;top:14px;display:flex;gap:10px}
+.pill-btn,.chip,.btn{border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--text);border-radius:999px;padding:9px 14px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.pill-btn:hover,.chip:hover,.btn:hover{background:rgba(255,255,255,.065);border-color:#3b3b4e}
+.hero{width:min(800px,100%);margin-top:150px;text-align:center}
+h1{font-size:34px;line-height:1.1;font-weight:760;letter-spacing:0;margin-bottom:4px}
+.sub{color:var(--muted);font-size:16px;margin-bottom:30px}
+.composer{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:12px 12px 11px;box-shadow:var(--shadow);text-align:left}
+.selectors{display:grid;grid-template-columns:1.4fr .85fr;gap:8px;margin-bottom:6px}
+.select-shell{position:relative}
+.select-shell i{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text);pointer-events:none}
+select,.branch-input,input,textarea{width:100%;border:1px solid var(--line);background:#0d0d15;color:var(--text);border-radius:18px;padding:10px 38px;font-size:14px;outline:none}
+select option{background:#0d0d15;color:var(--text)}
+.branch-input{padding-left:38px}
+select:focus,input:focus,textarea:focus{border-color:rgba(255,59,79,.72);box-shadow:0 0 0 3px rgba(230,18,42,.16)}
+.prompt-wrap{position:relative}
+.prompt{min-height:120px;border:0;background:transparent;border-radius:14px;padding:16px 16px 58px;resize:vertical;font-size:16px;color:var(--text)}
+.prompt::placeholder{color:#777486}
+.send{position:absolute;right:10px;bottom:10px;border:0;border-radius:999px;background:#292938;color:#8f8c9b;padding:9px 16px;display:flex;align-items:center;gap:10px;font-weight:650;cursor:pointer}
+.send.ready{background:linear-gradient(135deg,var(--brand),var(--brand2));color:white}
+.quick{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:28px}
+.chip{background:#0d0d15}
+.status{width:min(800px,100%);margin-top:18px}
+.msg{padding:12px 14px;border-radius:12px;font-size:13.5px;margin-bottom:10px;text-align:left}
 .ok{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);color:var(--success)}
-.err{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);color:var(--err)}
-.file-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
-.file-row:last-child{border-bottom:none}
-.file-name{font-weight:700;font-size:14px}
-.meta{font-size:12px;color:var(--muted);margin-top:3px}
+.err{background:rgba(255,138,138,.08);border:1px solid rgba(255,138,138,.28);color:var(--err)}
+.workspace-panels{width:min(1040px,100%);display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:36px}
+.workspace-tabs{width:min(1040px,100%);display:flex;gap:8px;margin-top:34px}
+.workspace-tab{border:1px solid var(--line);background:#0d0d15;color:var(--text);border-radius:999px;padding:9px 14px;cursor:pointer}
+.workspace-tab.active{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:white}
+.tab-panel{display:none;width:min(1040px,100%)}
+.tab-panel.active{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;text-align:left}
+.card h2{font-size:14px;font-weight:760;margin-bottom:12px}
+label{display:block;font-size:12px;color:var(--muted);margin:12px 0 7px}
+.hint,.meta{font-size:12px;color:var(--muted);line-height:1.45}
 .wide{grid-column:1/-1}
-.inline-check{display:flex;align-items:center;color:var(--muted);font-size:13px;margin:0 0 14px;text-transform:none;letter-spacing:0}
-.editor-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.draft{min-height:240px;border-radius:14px;padding:12px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.5}
+.generated-review{display:grid;grid-template-columns:280px 1fr;gap:14px;margin-top:14px}
+.generated-list{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0b0b12;max-height:420px;overflow-y:auto}
+.generated-item{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);padding:11px 12px;text-align:left;display:block;cursor:pointer}
+.generated-item:hover,.generated-item.active{background:rgba(230,18,42,.12)}
+.generated-item strong{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.generated-item span{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.review-pane{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0b0b12;min-height:420px;display:grid;grid-template-rows:auto 1fr}
+.review-tabs{display:flex;gap:6px;padding:8px;border-bottom:1px solid var(--line);background:#10101a}
+.review-tab{border:1px solid var(--line);background:#0d0d15;color:var(--text);border-radius:999px;padding:7px 11px;cursor:pointer;font-size:12px}
+.review-tab.active{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:white}
+.review-body{min-height:0}
+.review-code,.review-diff{height:100%;min-height:360px;overflow:auto;padding:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.55;white-space:pre;color:#e5e1ec}
+.review-frame{width:100%;height:100%;min-height:360px;border:0;background:white}
+.review-empty{padding:18px;color:var(--muted);font-size:13px}
+.review-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.file-list{max-height:380px;overflow:auto}
+.file-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.file-row:last-child{border-bottom:0}
+.file-name{font-weight:650;font-size:13.5px;overflow:hidden;text-overflow:ellipsis}
 .path-link{color:var(--text);text-decoration:none}
-.path-link:hover{color:var(--accent2)}
-.code-box{margin-top:10px;background:#07070d;border:1px solid var(--border);border-radius:9px;padding:12px;max-height:220px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:#d5d1dc;white-space:pre}
-.repo-link{color:var(--accent2);text-decoration:none}
-.preview-panel{position:fixed;inset:24px;background:#09090f;border:1px solid var(--border);border-radius:14px;z-index:50;display:none;flex-direction:column;box-shadow:0 26px 90px rgba(0,0,0,.65)}
+.path-link:hover{color:var(--brand)}
+.btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:white}
+.btn.secondary{background:#0d0d15}
+.inline-check{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;margin:10px 0}
+.inline-check input{width:auto}
+.code-box{margin-top:10px;background:#08080d;border:1px solid var(--line);border-radius:12px;padding:12px;max-height:180px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:#ddd9e7;white-space:pre}
+.preview-panel{position:fixed;inset:24px;background:#0d0d15;border:1px solid var(--line);border-radius:14px;z-index:50;display:none;flex-direction:column;box-shadow:0 26px 90px rgba(0,0,0,.6)}
 .preview-panel.open{display:flex}
-.preview-head{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--border)}
+.preview-head{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--line)}
 .preview-frame{flex:1;width:100%;border:0;background:white;border-radius:0 0 14px 14px}
-@media(max-width:820px){.grid{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.logo{max-width:100%}.preview-panel{inset:8px}}
+@media(max-width:900px){.app{grid-template-columns:1fr}.side{position:static;border-right:0;border-bottom:1px solid var(--line)}.main{padding:28px 16px}.hero{margin-top:42px}.selectors,.workspace-panels{grid-template-columns:1fr}.top-actions{position:static;align-self:flex-end}.preview-panel{inset:8px}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="top">
-    <img class="logo" src="libre-claude-red-black-dark.png" alt="Libre Claude">
-    <a class="back" href="index.php"><i class="fa-solid fa-arrow-left"></i> <?= htmlspecialchars($t('back_chat')) ?></a>
-  </div>
+<div class="app">
+  <aside class="side">
+    <div class="side-top">
+      <img class="mark" src="libre-claude-icon.png" alt="Libre Claude">
+      <button class="side-toggle" type="button" aria-label="Réduire la barre" onclick="toggleWorkspaceSidebar()"><i class="fa-solid fa-table-columns"></i></button>
+    </div>
+    <div class="side-section">
+      <a class="side-link" href="index.php"><i class="fa-solid fa-plus"></i><?= htmlspecialchars($t('chat_libre')) ?></a>
+      <a class="side-link" href="index.php"><i class="fa-solid fa-magnifying-glass"></i><?= htmlspecialchars($t('search')) ?></a>
+    </div>
+    <div class="side-section">
+      <div class="section-head"><span>All Tasks</span><i class="fa-solid fa-arrow-down-short-wide"></i></div>
+      <div class="section-head"><span>Previous 7 days</span></div>
+      <a class="task" href="workspace.php">
+        <i class="fa-solid fa-code-branch"></i>
+        <span>
+          <span class="task-title"><?= htmlspecialchars($github && !empty($github['repo']) ? $github['repo'] : $t('libre_coder')) ?></span>
+          <span class="task-meta"><?= htmlspecialchars($github && !empty($github['owner']) ? $github['owner'] . ' / ' . ($github['branch'] ?: 'main') : $t('workspace_empty_hint')) ?></span>
+        </span>
+      </a>
+    </div>
+    <div class="side-spacer"></div>
+    <div class="side-section">
+      <a class="side-link" href="settings.php"><i class="fa-solid fa-gear"></i><?= htmlspecialchars($t('settings')) ?></a>
+      <a class="side-link" href="api_tokens.php"><i class="fa-solid fa-key"></i><?= htmlspecialchars($t('api_keys')) ?></a>
+      <div class="user-pill"><span class="avatar"><?= htmlspecialchars(strtoupper(mb_substr($user['username'], 0, 1))) ?></span><span><?= htmlspecialchars($user['username']) ?></span></div>
+    </div>
+  </aside>
 
-  <h1><?= htmlspecialchars($t('workspace_title')) ?></h1>
-  <p class="sub"><?= htmlspecialchars($t('workspace_sub')) ?></p>
+  <main class="main">
+    <div class="top-actions">
+      <button class="pill-btn" type="button" onclick="publishGenerated()"><i class="fa-brands fa-github"></i> Publier GitHub</button>
+    </div>
 
-  <?php if (($_GET['github'] ?? '') === 'connected'): ?><div class="msg ok"><?= htmlspecialchars($t('github_oauth_success')) ?></div><?php endif; ?>
-  <?php if (!empty($_GET['github_error'])): ?><div class="msg err"><?= htmlspecialchars($t('github_oauth_failed')) ?><?php if ($githubOauthErrorDetail): ?><br><small><?= htmlspecialchars($githubOauthErrorDetail) ?></small><?php endif; ?></div><?php endif; ?>
-  <?php if ($success): ?><div class="msg ok"><?= htmlspecialchars($success) ?></div><?php endif; ?>
-  <?php if ($error): ?><div class="msg err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+    <section class="hero">
+      <h1><?= htmlspecialchars($t('libre_coder')) ?></h1>
+      <p class="sub"><?= htmlspecialchars($t('ai_coder_sub')) ?></p>
 
-  <div class="grid">
-    <section class="card">
-      <h2><?= htmlspecialchars($t('connect_github')) ?></h2>
-      <p class="hint" style="margin-top:0"><?= htmlspecialchars($t('github_oauth_hint')) ?></p>
-      <?php if ($oauthEnabled): ?>
-        <p style="margin-bottom:16px"><a class="btn" href="github_oauth.php"><i class="fa-brands fa-github"></i> <?= htmlspecialchars($t('github_oauth')) ?></a></p>
-      <?php else: ?>
-        <div class="msg err"><?= htmlspecialchars($t('github_oauth_config_missing')) ?></div>
-      <?php endif; ?>
-      <form method="POST">
-        <input type="hidden" name="action" value="connect">
-        <?php if ($authorizedRepos): ?>
-        <label><?= htmlspecialchars($t('github_repo_select')) ?></label>
-        <select name="repo_full_name">
-          <option value="">--</option>
-          <?php foreach ($authorizedRepos as $repoOption): ?>
-          <option value="<?= htmlspecialchars($repoOption['full_name'] ?? '') ?>" <?= (($github['owner'] ?? '') . '/' . ($github['repo'] ?? '')) === ($repoOption['full_name'] ?? '') ? 'selected' : '' ?>>
-            <?= htmlspecialchars($repoOption['full_name'] ?? '') ?>
-          </option>
-          <?php endforeach; ?>
-        </select>
-        <?php endif; ?>
-        <label><?= htmlspecialchars($t('github_repo')) ?></label>
-        <input name="repo_url" placeholder="<?= htmlspecialchars($t('repo_placeholder')) ?>" value="<?= htmlspecialchars($github['repo_url'] ?? '') ?>">
-        <label><?= htmlspecialchars($t('github_branch')) ?></label>
-        <input name="branch" placeholder="main" value="<?= htmlspecialchars($github['branch'] ?? 'main') ?>">
-        <label><?= htmlspecialchars($t('github_token')) ?></label>
-        <input type="password" name="token" placeholder="ghp_...">
-        <div class="hint"><?= htmlspecialchars($t('github_token_hint')) ?></div>
-        <button class="btn" type="submit"><i class="fa-brands fa-github"></i> <?= htmlspecialchars($t('connect_github')) ?></button>
+      <div class="status">
+        <?php if (($_GET['github'] ?? '') === 'connected'): ?><div class="msg ok"><?= htmlspecialchars($t('github_oauth_success')) ?></div><?php endif; ?>
+        <?php if (!empty($_GET['github_error'])): ?><div class="msg err"><?= htmlspecialchars($t('github_oauth_failed')) ?><?php if ($githubOauthErrorDetail): ?><br><small><?= htmlspecialchars($githubOauthErrorDetail) ?></small><?php endif; ?></div><?php endif; ?>
+        <?php if ($success): ?><div class="msg ok"><?= htmlspecialchars($success) ?></div><?php endif; ?>
+        <?php if ($error): ?><div class="msg err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+      </div>
+
+      <form class="composer" method="POST" id="coder-form">
+        <input type="hidden" name="action" value="ai_code">
+        <div class="selectors">
+          <div class="select-shell">
+            <i class="fa-brands fa-github"></i>
+            <select name="repo_full_name">
+              <?php if ($github && !empty($github['owner']) && !empty($github['repo'])): ?>
+              <option value="<?= htmlspecialchars($github['owner'] . '/' . $github['repo']) ?>"><?= htmlspecialchars($github['owner'] . '/' . $github['repo']) ?></option>
+              <?php else: ?>
+              <option value=""><?= htmlspecialchars($t('github_repo_select')) ?></option>
+              <?php endif; ?>
+              <?php foreach ($authorizedRepos as $repoOption): ?>
+              <?php $full = $repoOption['full_name'] ?? ''; if ($full === '') continue; ?>
+              <option value="<?= htmlspecialchars($full) ?>" <?= (($github['owner'] ?? '') . '/' . ($github['repo'] ?? '')) === $full ? 'selected' : '' ?>><?= htmlspecialchars($full) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="select-shell">
+            <i class="fa-solid fa-code-branch"></i>
+            <input class="branch-input" name="branch" value="<?= htmlspecialchars($github['branch'] ?? 'main') ?>" placeholder="main">
+          </div>
+        </div>
+        <div class="prompt-wrap">
+          <textarea class="prompt" name="ai_prompt" id="ai-prompt" placeholder="Code your creativity here."><?= htmlspecialchars($aiPrompt) ?></textarea>
+          <button class="send" id="code-send" type="submit"><span>Coding</span><i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+        <textarea name="ai_context_paths" id="ai-context" hidden><?= htmlspecialchars($aiContextPaths) ?></textarea>
       </form>
+
+      <div class="quick">
+        <button class="chip" type="button" data-prompt="Refactor the code in this repository">Refactor the code in this repository</button>
+        <button class="chip" type="button" data-prompt="Write unit tests for the important parts">Write unit tests</button>
+        <button class="chip" type="button" data-prompt="Optimize performance and explain the changes in code comments only where useful">Optimize performance</button>
+        <button class="chip" type="button" data-prompt="Generate a clean README for this repository">Generate README</button>
+        <button class="chip" type="button" data-prompt="Review the project and propose the smallest useful code improvement">More</button>
+      </div>
     </section>
 
-    <section class="card">
-      <h2><?= htmlspecialchars($t('connected_repo')) ?></h2>
-      <?php if ($github && !empty($github['owner']) && !empty($github['repo'])): ?>
-        <div class="file-name"><?= htmlspecialchars($github['owner'] . '/' . $github['repo']) ?></div>
-        <div class="meta"><?= htmlspecialchars($t('github_branch')) ?>: <?= htmlspecialchars($github['branch'] ?: 'main') ?></div>
-        <p style="margin-top:14px"><a class="btn secondary" target="_blank" rel="noopener" href="https://github.com/<?= htmlspecialchars(rawurlencode($github['owner'])) ?>/<?= htmlspecialchars(rawurlencode($github['repo'])) ?>"><i class="fa-brands fa-github"></i> <?= htmlspecialchars($t('open_github')) ?></a></p>
-      <?php elseif ($github && !empty($github['token'])): ?>
-        <p class="meta"><?= htmlspecialchars($t('github_oauth_success')) ?> <?= htmlspecialchars($t('github_repo_select')) ?>.</p>
-      <?php else: ?>
-        <p class="meta"><?= htmlspecialchars($t('no_repo_connected')) ?></p>
-      <?php endif; ?>
-    </section>
-  </div>
+    <div class="workspace-tabs">
+      <button class="workspace-tab active" type="button" data-workspace-tab="publish">Publication</button>
+      <button class="workspace-tab" type="button" data-workspace-tab="settings">Paramètres</button>
+    </div>
 
-  <div class="grid">
-    <section class="card" id="create-workspace">
-      <h2><?= htmlspecialchars($t('create_repo')) ?></h2>
-      <form method="POST">
-        <input type="hidden" name="action" value="create_repo">
-        <label><?= htmlspecialchars($t('repo_name')) ?></label>
-        <input name="repo_name" placeholder="libre-claude-app">
-        <label><?= htmlspecialchars($t('repo_description')) ?></label>
-        <input name="repo_description" placeholder="<?= htmlspecialchars($t('repo_description_placeholder')) ?>">
-        <label><?= htmlspecialchars($t('github_token')) ?></label>
-        <input type="password" name="create_token" placeholder="ghp_...">
-        <label class="inline-check"><input type="checkbox" name="private" value="1"> <?= htmlspecialchars($t('private_repo')) ?></label>
-        <button class="btn" type="submit"><i class="fa-brands fa-github"></i> <?= htmlspecialchars($t('create_repo')) ?></button>
-      </form>
-    </section>
-
-    <section class="card">
-      <h2><?= htmlspecialchars($t('file_editor')) ?></h2>
-      <?php if (!$github || empty($github['owner']) || empty($github['repo'])): ?>
-        <p class="meta"><?= htmlspecialchars($t('no_repo_connected')) ?></p>
-      <?php else: ?>
-      <form method="POST">
-        <input type="hidden" name="action" value="save_file">
-        <input type="hidden" name="file_sha" value="<?= htmlspecialchars($selectedFile['sha'] ?? '') ?>">
-        <label><?= htmlspecialchars($t('file_path')) ?></label>
-        <input name="file_path" placeholder="src/app.js" value="<?= htmlspecialchars($selectedFile['path'] ?? $selectedPath) ?>">
-        <div class="hint"><?= htmlspecialchars($t('new_file_hint')) ?></div>
-        <label><?= htmlspecialchars($t('commit_message')) ?></label>
-        <input name="commit_message" placeholder="<?= htmlspecialchars($t('commit_message_placeholder')) ?>">
-        <label><?= htmlspecialchars($t('file_content')) ?></label>
-        <textarea name="file_content"><?= htmlspecialchars($selectedFile['content'] ?? '') ?></textarea>
-        <div class="editor-actions">
-          <button class="btn" type="submit"><i class="fa-solid fa-code-commit"></i> <?= htmlspecialchars($t('commit_file')) ?></button>
-          <?php if ($github && !empty($github['owner']) && !empty($github['repo'])): ?>
-          <a class="btn secondary" target="_blank" rel="noopener" href="https://github.com/<?= htmlspecialchars(rawurlencode($github['owner'])) ?>/<?= htmlspecialchars(rawurlencode($github['repo'])) ?>"><i class="fa-brands fa-github"></i> <?= htmlspecialchars($t('open_github')) ?></a>
+    <section class="tab-panel active" id="workspace-tab-publish">
+      <div class="workspace-panels" style="grid-template-columns:1fr">
+        <div class="card wide">
+          <h2><?= htmlspecialchars($t('review_generated_files')) ?></h2>
+          <?php if (!$github || empty($github['owner']) || empty($github['repo'])): ?>
+            <p class="meta"><?= htmlspecialchars($t('no_repo_connected')) ?></p>
+          <?php else: ?>
+          <form method="POST">
+            <input type="hidden" name="action" value="save_many_files">
+            <label><?= htmlspecialchars($t('commit_message')) ?></label>
+            <input name="multi_commit_message" value="<?= htmlspecialchars($aiPrompt ? mb_substr($aiPrompt, 0, 90) : '') ?>" placeholder="<?= htmlspecialchars($t('commit_message_placeholder')) ?>">
+            <label><?= htmlspecialchars($t('multi_file_payload')) ?></label>
+            <textarea class="draft" id="multi-files-draft" name="multi_files" placeholder="<?= htmlspecialchars($t('multi_file_placeholder')) ?>"><?= htmlspecialchars($aiFilesDraft) ?></textarea>
+            <p class="hint"><?= htmlspecialchars($t('multi_file_hint')) ?></p>
+            <div class="review-actions">
+              <button class="btn secondary" type="button" onclick="refreshGeneratedReview()"><i class="fa-solid fa-list-check"></i> Prévisualiser</button>
+              <button class="btn secondary" type="button" onclick="applyGeneratedToCommit()"><i class="fa-solid fa-wand-magic-sparkles"></i> Appliquer au commit</button>
+            </div>
+            <div class="generated-review" id="generated-review">
+              <div class="generated-list" id="generated-list">
+                <div class="review-empty">Aucun fichier à prévisualiser.</div>
+              </div>
+              <div class="review-pane">
+                <div class="review-tabs">
+                  <button class="review-tab active" type="button" data-review-tab="diff">Différence</button>
+                  <button class="review-tab" type="button" data-review-tab="preview">Aperçu</button>
+                  <button class="review-tab" type="button" data-review-tab="log">Log</button>
+                </div>
+                <div class="review-body" id="review-body">
+                  <pre class="review-code" id="review-code" hidden>Sélectionnez un fichier généré.</pre>
+                  <iframe class="review-frame" id="review-frame" sandbox="allow-scripts allow-forms allow-modals" hidden></iframe>
+                  <pre class="review-diff" id="review-diff">Sélectionnez un fichier généré.</pre>
+                </div>
+              </div>
+            </div>
+            <button class="btn primary" type="submit"><i class="fa-solid fa-code-commit"></i><?= htmlspecialchars($t('multi_file_commit')) ?></button>
+          </form>
           <?php endif; ?>
         </div>
-      </form>
-      <?php endif; ?>
+      </div>
     </section>
-  </div>
 
-  <div class="grid">
-    <section class="card wide">
-      <h2><?= htmlspecialchars($t('multi_file_commit')) ?></h2>
-      <?php if (!$github || empty($github['owner']) || empty($github['repo'])): ?>
-        <p class="meta"><?= htmlspecialchars($t('no_repo_connected')) ?></p>
-      <?php else: ?>
-      <form method="POST">
-        <input type="hidden" name="action" value="save_many_files">
-        <label><?= htmlspecialchars($t('commit_message')) ?></label>
-        <input name="multi_commit_message" placeholder="<?= htmlspecialchars($t('commit_message_placeholder')) ?>">
-        <label><?= htmlspecialchars($t('multi_file_payload')) ?></label>
-        <textarea name="multi_files" style="min-height:190px" placeholder="<?= htmlspecialchars($t('multi_file_placeholder')) ?>"></textarea>
-        <div class="hint"><?= htmlspecialchars($t('multi_file_hint')) ?></div>
-        <button class="btn" type="submit"><i class="fa-solid fa-code-commit"></i> <?= htmlspecialchars($t('multi_file_commit')) ?></button>
-      </form>
-      <?php endif; ?>
-    </section>
-  </div>
+    <section class="tab-panel" id="workspace-tab-settings">
+      <div class="workspace-panels" id="environment">
+      <div class="card">
+        <h2><?= htmlspecialchars($t('connect_github')) ?></h2>
+        <p class="hint"><?= htmlspecialchars($t('github_oauth_hint')) ?></p>
+        <?php if ($oauthEnabled): ?>
+        <p style="margin:12px 0"><a class="btn primary" href="github_oauth.php"><i class="fa-brands fa-github"></i><?= htmlspecialchars($t('github_oauth')) ?></a></p>
+        <?php else: ?>
+        <div class="msg err"><?= htmlspecialchars($t('github_oauth_config_missing')) ?></div>
+        <?php endif; ?>
+        <form method="POST">
+          <input type="hidden" name="action" value="connect">
+          <label><?= htmlspecialchars($t('github_repo')) ?></label>
+          <input name="repo_url" placeholder="<?= htmlspecialchars($t('repo_placeholder')) ?>" value="<?= htmlspecialchars($github['repo_url'] ?? '') ?>">
+          <label><?= htmlspecialchars($t('github_branch')) ?></label>
+          <input name="branch" placeholder="main" value="<?= htmlspecialchars($github['branch'] ?? 'main') ?>">
+          <button class="btn" type="submit"><i class="fa-solid fa-plug"></i><?= htmlspecialchars($t('connect_github')) ?></button>
+        </form>
+      </div>
 
-  <div class="grid">
-    <section class="card">
-      <h2><?= htmlspecialchars($t('saved_blocks')) ?></h2>
-      <?php if (!$files): ?>
-        <p class="meta"><?= htmlspecialchars($t('no_saved_blocks')) ?></p>
-      <?php else: ?>
-        <?php foreach ($files as $file): ?>
-        <div class="file-row">
-          <div>
-            <div class="file-name"><?= htmlspecialchars($file['name']) ?></div>
-            <div class="meta"><?= htmlspecialchars($file['language']) ?> - <?= htmlspecialchars($file['updated_at']) ?></div>
+      <div class="card" id="create-workspace">
+        <h2><?= htmlspecialchars($t('create_repo')) ?></h2>
+        <form method="POST">
+          <input type="hidden" name="action" value="create_repo">
+          <label><?= htmlspecialchars($t('repo_name')) ?></label>
+          <input name="repo_name" placeholder="libre-claude-app">
+          <label><?= htmlspecialchars($t('repo_description')) ?></label>
+          <input name="repo_description" placeholder="<?= htmlspecialchars($t('repo_description_placeholder')) ?>">
+          <label class="inline-check"><input type="checkbox" name="private" value="1"> <?= htmlspecialchars($t('private_repo')) ?></label>
+          <button class="btn" type="submit"><i class="fa-brands fa-github"></i><?= htmlspecialchars($t('create_repo')) ?></button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2><?= htmlspecialchars($t('repo_files')) ?></h2>
+        <div class="file-list">
+        <?php if ($treeError): ?>
+          <div class="msg err"><?= htmlspecialchars($t('github_fetch_error') . ' ' . $treeError) ?></div>
+        <?php elseif (!$github || empty($github['owner']) || empty($github['repo'])): ?>
+          <p class="meta"><?= htmlspecialchars($t('no_repo_connected')) ?></p>
+        <?php elseif (!$repoFiles): ?>
+          <p class="meta"><?= htmlspecialchars($t('github_fetch_error')) ?></p>
+        <?php else: ?>
+          <?php foreach ($repoFiles as $repoFile): ?>
+          <div class="file-row">
+            <div>
+              <div class="file-name"><a class="path-link" href="workspace.php?path=<?= urlencode($repoFile['path']) ?>"><?= htmlspecialchars($repoFile['path']) ?></a></div>
+              <div class="meta"><?= htmlspecialchars((string)($repoFile['size'] ?? 0)) ?> <?= htmlspecialchars($t('bytes')) ?></div>
+            </div>
+            <button class="btn secondary" type="button" onclick="addContextPath(<?= htmlspecialchars(json_encode($repoFile['path'])) ?>)"><i class="fa-solid fa-plus"></i></button>
           </div>
-          <button class="btn secondary" type="button" onclick="previewCode(<?= htmlspecialchars(json_encode($file['language'])) ?>, <?= htmlspecialchars(json_encode($file['content'])) ?>)"><i class="fa-solid fa-eye"></i> <?= htmlspecialchars($t('code_preview')) ?></button>
+          <?php endforeach; ?>
+        <?php endif; ?>
         </div>
-        <pre class="code-box"><?= htmlspecialchars($file['content']) ?></pre>
-        <?php endforeach; ?>
-      <?php endif; ?>
-    </section>
+      </div>
 
-    <section class="card">
-      <h2><?= htmlspecialchars($t('repo_files')) ?></h2>
-      <?php if ($treeError): ?>
-        <div class="msg err"><?= htmlspecialchars($t('github_fetch_error') . ' ' . $treeError) ?></div>
-      <?php elseif (!$github || empty($github['owner']) || empty($github['repo'])): ?>
-        <p class="meta"><?= htmlspecialchars($t('no_repo_connected')) ?></p>
-      <?php elseif (!$repoFiles): ?>
-        <p class="meta"><?= htmlspecialchars($t('github_fetch_error')) ?></p>
-      <?php else: ?>
-        <?php foreach ($repoFiles as $repoFile): ?>
-        <div class="file-row">
-          <div>
-            <div class="file-name"><a class="path-link" href="workspace.php?path=<?= urlencode($repoFile['path']) ?>"><?= htmlspecialchars($repoFile['path']) ?></a></div>
-            <div class="meta"><?= htmlspecialchars((string)($repoFile['size'] ?? 0)) ?> <?= htmlspecialchars($t('bytes')) ?></div>
+      <div class="card">
+        <h2><?= htmlspecialchars($t('saved_blocks')) ?></h2>
+        <?php if (!$files): ?>
+          <p class="meta"><?= htmlspecialchars($t('no_saved_blocks')) ?></p>
+        <?php else: ?>
+          <?php foreach ($files as $file): ?>
+          <div class="file-row">
+            <div>
+              <div class="file-name"><?= htmlspecialchars($file['name']) ?></div>
+              <div class="meta"><?= htmlspecialchars($file['language']) ?> - <?= htmlspecialchars($file['updated_at']) ?></div>
+            </div>
+            <button class="btn secondary" type="button" onclick="previewCode(<?= htmlspecialchars(json_encode($file['language'])) ?>, <?= htmlspecialchars(json_encode($file['content'])) ?>)"><i class="fa-solid fa-eye"></i></button>
           </div>
-          <a class="btn secondary" href="workspace.php?path=<?= urlencode($repoFile['path']) ?>"><i class="fa-solid fa-pen-to-square"></i> <?= htmlspecialchars($t('load_file')) ?></a>
-        </div>
-        <?php endforeach; ?>
-      <?php endif; ?>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
+      </div>
     </section>
-  </div>
+  </main>
 </div>
 
 <div class="preview-panel" id="preview-panel">
@@ -581,6 +814,19 @@ function buildPreviewDoc(lang, code) {
   if (lang === 'js' || lang === 'javascript') return '<!doctype html><html><body><main id="app"></main><script>' + code.replace(/<\/script/gi, '<\\/script') + '<\/script></body></html>';
   return '<!doctype html><html><body><pre>' + String(code).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</pre></body></html>';
 }
+function toggleWorkspaceSidebar() {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  app.classList.toggle('sidebar-collapsed');
+  try {
+    localStorage.setItem('libreClaudeWorkspaceSidebar', app.classList.contains('sidebar-collapsed') ? 'collapsed' : 'open');
+  } catch (e) {}
+}
+try {
+  if (localStorage.getItem('libreClaudeWorkspaceSidebar') === 'collapsed') {
+    document.querySelector('.app')?.classList.add('sidebar-collapsed');
+  }
+} catch (e) {}
 function previewCode(lang, code) {
   document.getElementById('preview-frame').srcdoc = buildPreviewDoc(lang, code);
   document.getElementById('preview-panel').classList.add('open');
@@ -589,6 +835,187 @@ function closePreview() {
   document.getElementById('preview-frame').srcdoc = '';
   document.getElementById('preview-panel').classList.remove('open');
 }
+let generatedFiles = [];
+let selectedGeneratedIndex = 0;
+let reviewTab = 'diff';
+
+function generatedDraftField() {
+  return document.getElementById('multi-files-draft');
+}
+
+function parseGeneratedFiles() {
+  const field = generatedDraftField();
+  if (!field) return [];
+  try {
+    const parsed = JSON.parse(field.value || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(item => item && typeof item === 'object' && item.path && Object.prototype.hasOwnProperty.call(item, 'content'))
+      .map(item => ({ path: String(item.path), content: String(item.content) }));
+  } catch (e) {
+    return [];
+  }
+}
+
+function fileKind(path) {
+  const ext = String(path || '').split('.').pop().toLowerCase();
+  if (ext === 'html' || ext === 'htm') return 'html';
+  if (ext === 'css') return 'css';
+  if (ext === 'js' || ext === 'mjs') return 'javascript';
+  if (ext === 'svg') return 'svg';
+  return ext || 'file';
+}
+
+function formatGeneratedDiff(file) {
+  const lines = String(file.content || '').split('\n');
+  const header = [
+    'diff --git a/' + file.path + ' b/' + file.path,
+    '--- a/' + file.path,
+    '+++ b/' + file.path,
+    '@@ generated by Libre Claude Coder @@',
+  ];
+  return header.concat(lines.map(line => '+ ' + line)).join('\n');
+}
+
+function formatGeneratedLog(file) {
+  const lineCount = String(file.content || '').split('\n').length;
+  return [
+    '$ preparing generated file',
+    'path: ' + file.path,
+    'type: ' + fileKind(file.path),
+    'lines: ' + lineCount,
+    '',
+    String(file.content || ''),
+  ].join('\n');
+}
+
+function renderGeneratedList() {
+  const list = document.getElementById('generated-list');
+  if (!list) return;
+  if (!generatedFiles.length) {
+    list.innerHTML = '<div class="review-empty">Aucun fichier à prévisualiser.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  generatedFiles.forEach((file, index) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'generated-item' + (index === selectedGeneratedIndex ? ' active' : '');
+    btn.innerHTML = '<strong></strong><span></span>';
+    btn.querySelector('strong').textContent = file.path;
+    btn.querySelector('span').textContent = fileKind(file.path) + ' · ' + String(file.content || '').split('\n').length + ' lignes';
+    btn.addEventListener('click', () => {
+      selectedGeneratedIndex = index;
+      renderGeneratedList();
+      renderGeneratedReview();
+    });
+    list.appendChild(btn);
+  });
+}
+
+function setReviewTab(tab) {
+  reviewTab = tab;
+  document.querySelectorAll('[data-review-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.reviewTab === tab);
+  });
+  renderGeneratedReview();
+}
+
+function renderGeneratedReview() {
+  const file = generatedFiles[selectedGeneratedIndex];
+  const code = document.getElementById('review-code');
+  const diff = document.getElementById('review-diff');
+  const frame = document.getElementById('review-frame');
+  if (!code || !diff || !frame) return;
+
+  if (!file) {
+    code.textContent = 'Aucun fichier sélectionné.';
+    diff.textContent = 'Aucun fichier sélectionné.';
+    frame.srcdoc = '';
+    code.hidden = reviewTab !== 'log';
+    diff.hidden = reviewTab !== 'diff';
+    frame.hidden = reviewTab !== 'preview';
+    return;
+  }
+
+  code.textContent = formatGeneratedLog(file);
+  diff.textContent = formatGeneratedDiff(file);
+  frame.srcdoc = buildPreviewDoc(fileKind(file.path), file.content);
+  code.hidden = reviewTab !== 'log';
+  diff.hidden = reviewTab !== 'diff';
+  frame.hidden = reviewTab !== 'preview';
+}
+
+function refreshGeneratedReview() {
+  generatedFiles = parseGeneratedFiles();
+  selectedGeneratedIndex = Math.min(selectedGeneratedIndex, Math.max(generatedFiles.length - 1, 0));
+  renderGeneratedList();
+  renderGeneratedReview();
+}
+
+function applyGeneratedToCommit() {
+  const field = generatedDraftField();
+  generatedFiles = parseGeneratedFiles();
+  if (!field || !generatedFiles.length) {
+    refreshGeneratedReview();
+    return;
+  }
+  field.value = JSON.stringify(generatedFiles, null, 2);
+  refreshGeneratedReview();
+  field.focus();
+}
+
+function publishGenerated() {
+  applyGeneratedToCommit();
+  const field = generatedDraftField();
+  const files = parseGeneratedFiles();
+  if (!field || !files.length) {
+    document.getElementById('generated-review')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+    return;
+  }
+  field.form.requestSubmit();
+}
+
+function setWorkspaceTab(name) {
+  document.querySelectorAll('[data-workspace-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.workspaceTab === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === 'workspace-tab-' + name);
+  });
+}
+
+document.querySelectorAll('[data-workspace-tab]').forEach(btn => {
+  btn.addEventListener('click', () => setWorkspaceTab(btn.dataset.workspaceTab || 'publish'));
+});
+
+function addContextPath(path) {
+  const field = document.getElementById('ai-context');
+  const current = field.value.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
+  if (!current.includes(path)) current.push(path);
+  field.value = current.join('\n');
+  const prompt = document.getElementById('ai-prompt');
+  prompt.focus();
+}
+document.querySelectorAll('[data-prompt]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const prompt = document.getElementById('ai-prompt');
+    prompt.value = btn.dataset.prompt || '';
+    prompt.dispatchEvent(new Event('input'));
+    prompt.focus();
+  });
+});
+const promptInput = document.getElementById('ai-prompt');
+const sendButton = document.getElementById('code-send');
+function syncSendState() {
+  sendButton.classList.toggle('ready', promptInput.value.trim().length > 0);
+}
+promptInput.addEventListener('input', syncSendState);
+syncSendState();
+document.querySelectorAll('[data-review-tab]').forEach(btn => {
+  btn.addEventListener('click', () => setReviewTab(btn.dataset.reviewTab || 'diff'));
+});
+refreshGeneratedReview();
 </script>
 </body>
 </html>

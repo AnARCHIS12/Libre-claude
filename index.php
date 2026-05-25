@@ -1135,15 +1135,19 @@ body {
     </a>
     <?php endif; ?>
     <?php if ($user): ?>
-    <a href="api_tokens.php" class="nav-link">
-      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 2a1 1 0 000 2h6a1 1 0 100-2H7zm0 4a1 1 0 100 2h6a1 1 0 100-2H7zm0 4a1 1 0 100 2h3a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>
-      <?= htmlspecialchars($t('api_keys')) ?>
+    <a href="index.php" class="nav-link">
+      <i class="fa-solid fa-message"></i>
+      <?= htmlspecialchars($t('chat_libre')) ?>
+    </a>
+    <a href="workspace.php" class="nav-link">
+      <i class="fa-solid fa-code"></i>
+      <?= htmlspecialchars($t('libre_coder')) ?>
     </a>
     <?php endif; ?>
     <?php if ($user): ?>
-    <a href="workspace.php" class="nav-link">
-      <i class="fa-solid fa-code-branch"></i>
-      <?= htmlspecialchars($t('workspace')) ?>
+    <a href="api_tokens.php" class="nav-link">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 2a1 1 0 000 2h6a1 1 0 100-2H7zm0 4a1 1 0 100 2h6a1 1 0 100-2H7zm0 4a1 1 0 100 2h3a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>
+      <?= htmlspecialchars($t('api_keys')) ?>
     </a>
     <?php endif; ?>
     <a href="settings.php" class="nav-link">
