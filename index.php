@@ -1122,7 +1122,7 @@ body {
     </div>
     <?php endforeach; ?>
     <?php else: ?>
-    <div style="padding:16px 8px;font-size:13px;color:var(--muted);text-align:center"><?= htmlspecialchars($t('no_conversation')) ?></div>
+    <div data-empty style="padding:16px 8px;font-size:13px;color:var(--muted);text-align:center"><?= htmlspecialchars($t('no_conversation')) ?></div>
     <?php endif; ?>
   </div>
   <?php endif; ?>
@@ -1762,12 +1762,14 @@ function addConvToSidebar(id, title) {
   if (empty) empty.remove();
 
   // Check label
-  let label = list.querySelector('.conv-section-label');
+  let label = Array.from(list.children).find(child => child.classList.contains('conv-section-label'));
   if (!label) {
     label = document.createElement('div');
     label.className = 'conv-section-label';
     label.textContent = uiText.recent;
-    list.insertBefore(label, list.firstChild);
+    const workspaceMenu = Array.from(list.children).find(child => child.classList.contains('workspace-menu'));
+    const reference = workspaceMenu ? workspaceMenu.nextSibling : list.firstChild;
+    list.insertBefore(label, reference);
   }
 
   // Check not already there
@@ -1787,7 +1789,8 @@ function addConvToSidebar(id, title) {
   // Remove active from others
   document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
 
-  list.insertBefore(div, label.nextSibling);
+  const reference = label.parentNode === list ? label.nextSibling : null;
+  list.insertBefore(div, reference && reference.parentNode === list ? reference : null);
 }
 
 // ============================================================
