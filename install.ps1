@@ -5,6 +5,7 @@ param(
     [string]$PublicUrl = $(if ($env:PUBLIC_URL) { $env:PUBLIC_URL } else { "" }),
     [string]$GitHubOAuthClientId = $(if ($env:GITHUB_OAUTH_CLIENT_ID) { $env:GITHUB_OAUTH_CLIENT_ID } else { "" }),
     [string]$GitHubOAuthClientSecret = $(if ($env:GITHUB_OAUTH_CLIENT_SECRET) { $env:GITHUB_OAUTH_CLIENT_SECRET } else { "" }),
+    [string]$GitHubOAuthScope = $(if ($env:GITHUB_OAUTH_SCOPE) { $env:GITHUB_OAUTH_SCOPE } else { "" }),
     [switch]$Yes,
     [switch]$NoStart,
     [switch]$NoInstallDocker,
@@ -216,6 +217,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $Dir "sandbox") | Out-Null
 PUBLIC_URL=$PublicUrl
 GITHUB_OAUTH_CLIENT_ID=$GitHubOAuthClientId
 GITHUB_OAUTH_CLIENT_SECRET=$GitHubOAuthClientSecret
+GITHUB_OAUTH_SCOPE=$GitHubOAuthScope
 "@ | Set-Content -Encoding UTF8 -Path (Join-Path $Dir ".env")
 
 @"
@@ -230,6 +232,7 @@ services:
       PUBLIC_URL: `${PUBLIC_URL:-}
       GITHUB_OAUTH_CLIENT_ID: `${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: `${GITHUB_OAUTH_CLIENT_SECRET:-}
+      GITHUB_OAUTH_SCOPE: `${GITHUB_OAUTH_SCOPE:-}
     volumes:
       - ./data:/var/www/html/data
       - ./sandbox:/var/www/html/sandbox

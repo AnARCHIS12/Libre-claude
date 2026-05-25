@@ -69,23 +69,48 @@ function github_oauth_post($url, $fields) {
     return json_decode($response ?: '{}', true);
 }
 
+function github_oauth_scope($clientId) {
+    if (defined('GITHUB_OAUTH_SCOPE') && GITHUB_OAUTH_SCOPE !== '') {
+        return GITHUB_OAUTH_SCOPE;
+    }
+
+    // GitHub App client IDs usually start with Iv and use fine-grained app permissions,
+    // not OAuth scopes. OAuth App client IDs usually start with Ov and can request repo.
+    return preg_match('/^Iv/i', $clientId) ? '' : 'repo';
+}
+
+function github_oauth_fail($code, $details = '') {
+    if ($details !== '') {
+        $_SESSION['github_oauth_error_detail'] = $details;
+    }
+    header('Location: workspace.php?github_error=' . rawurlencode($code));
+    exit;
+}
+
+if (!empty($_GET['error'])) {
+    $details = $_GET['error_description'] ?? $_GET['error'] ?? '';
+    github_oauth_fail((string) $_GET['error'], (string) $details);
+}
+
 if (empty($_GET['code'])) {
     $state = bin2hex(random_bytes(16));
     $_SESSION['github_oauth_state'] = $state;
     $params = [
         'client_id' => $clientId,
         'redirect_uri' => github_oauth_redirect_uri(),
-        'scope' => 'repo',
         'state' => $state,
         'allow_signup' => 'true',
     ];
+    $scope = github_oauth_scope($clientId);
+    if ($scope !== '') {
+        $params['scope'] = $scope;
+    }
     header('Location: https://github.com/login/oauth/authorize?' . http_build_query($params));
     exit;
 }
 
 if (empty($_GET['state']) || empty($_SESSION['github_oauth_state']) || !hash_equals($_SESSION['github_oauth_state'], $_GET['state'])) {
-    header('Location: workspace.php?github_error=state');
-    exit;
+    github_oauth_fail('state', 'Etat OAuth invalide ou session expiree. Relancez la connexion GitHub.');
 }
 unset($_SESSION['github_oauth_state']);
 
@@ -98,8 +123,11 @@ $tokenResponse = github_oauth_post('https://github.com/login/oauth/access_token'
 
 $token = $tokenResponse['access_token'] ?? '';
 if ($token === '') {
-    header('Location: workspace.php?github_error=oauth');
-    exit;
+    $details = '';
+    if (is_array($tokenResponse)) {
+        $details = $tokenResponse['error_description'] ?? $tokenResponse['error'] ?? '';
+    }
+    github_oauth_fail('oauth', $details ?: 'GitHub n a pas renvoye de jeton. Verifiez le Client Secret et le callback URL.');
 }
 
 $current = $db->fetch("SELECT * FROM workspace_github WHERE user_id = ?", [$user['id']]);

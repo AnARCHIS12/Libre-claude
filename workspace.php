@@ -24,6 +24,11 @@ $lang = current_language($user);
 $t = fn($key) => t($key, $lang);
 $success = '';
 $error = '';
+$githubOauthErrorDetail = '';
+if (!empty($_GET['github_error']) && !empty($_SESSION['github_oauth_error_detail'])) {
+    $githubOauthErrorDetail = (string) $_SESSION['github_oauth_error_detail'];
+    unset($_SESSION['github_oauth_error_detail']);
+}
 
 function parse_github_repo($value) {
     $value = trim($value);
@@ -406,7 +411,7 @@ input[type="checkbox"]{width:auto;margin:0 8px 0 0}
   <p class="sub"><?= htmlspecialchars($t('workspace_sub')) ?></p>
 
   <?php if (($_GET['github'] ?? '') === 'connected'): ?><div class="msg ok"><?= htmlspecialchars($t('github_oauth_success')) ?></div><?php endif; ?>
-  <?php if (!empty($_GET['github_error'])): ?><div class="msg err"><?= htmlspecialchars($t('github_oauth_failed')) ?></div><?php endif; ?>
+  <?php if (!empty($_GET['github_error'])): ?><div class="msg err"><?= htmlspecialchars($t('github_oauth_failed')) ?><?php if ($githubOauthErrorDetail): ?><br><small><?= htmlspecialchars($githubOauthErrorDetail) ?></small><?php endif; ?></div><?php endif; ?>
   <?php if ($success): ?><div class="msg ok"><?= htmlspecialchars($success) ?></div><?php endif; ?>
   <?php if ($error): ?><div class="msg err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 

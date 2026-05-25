@@ -8,6 +8,7 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      GITHUB_OAUTH_SCOPE: ${GITHUB_OAUTH_SCOPE:-}
     volumes:
       - libre_claude_data:/var/www/html/data
       - libre_claude_sandbox:/var/www/html/sandbox

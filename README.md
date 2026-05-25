@@ -162,6 +162,7 @@ curl -fsSL https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/instal
   LIBRE_CLAUDE_YES=1 \
   GITHUB_OAUTH_CLIENT_ID=votre_client_id \
   GITHUB_OAUTH_CLIENT_SECRET=votre_client_secret \
+  GITHUB_OAUTH_SCOPE=repo \
   sh
 ```
 
@@ -247,6 +248,7 @@ cp .env.example .env
 PUBLIC_URL=https://votre-domaine.com
 GITHUB_OAUTH_CLIENT_ID=votre_client_id
 GITHUB_OAUTH_CLIENT_SECRET=votre_client_secret
+GITHUB_OAUTH_SCOPE=
 ```
 
 3. Construisez et lancez :
@@ -422,6 +424,7 @@ Renseignez ensuite `config.php` :
 define('PUBLIC_URL', 'https://votre-domaine.com');
 define('GITHUB_OAUTH_CLIENT_ID', 'votre_client_id');
 define('GITHUB_OAUTH_CLIENT_SECRET', 'votre_client_secret');
+define('GITHUB_OAUTH_SCOPE', '');
 ```
 
 ### Activer OAuth avec Docker
@@ -432,9 +435,12 @@ Renseignez `.env` :
 PUBLIC_URL=https://votre-domaine.com
 GITHUB_OAUTH_CLIENT_ID=votre_client_id
 GITHUB_OAUTH_CLIENT_SECRET=votre_client_secret
+GITHUB_OAUTH_SCOPE=
 ```
 
 `PUBLIC_URL` force l'URL publique utilisée pour OAuth. Elle est recommandée derrière un reverse proxy HTTPS, par exemple Dockhand, Traefik, Nginx Proxy Manager ou Cloudflare Tunnel.
+
+`GITHUB_OAUTH_SCOPE` peut rester vide. Libre Claude detecte les GitHub Apps dont le `Client ID` commence par `Iv` et n'envoie pas de scope, car leurs permissions sont gerees dans la GitHub App. Pour une OAuth App classique, utilisez `repo` si vous voulez acceder aux depots prives.
 
 Puis relancez :
 

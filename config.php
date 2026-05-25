@@ -38,6 +38,7 @@ define('MISTRAL_TRANSCRIPTION_ENDPOINT', 'https://api.mistral.ai/v1/audio/transc
 define('PUBLIC_URL', rtrim(libreclaude_env('PUBLIC_URL', ''), '/'));
 define('GITHUB_OAUTH_CLIENT_ID', libreclaude_env('GITHUB_OAUTH_CLIENT_ID', ''));
 define('GITHUB_OAUTH_CLIENT_SECRET', libreclaude_env('GITHUB_OAUTH_CLIENT_SECRET', ''));
+define('GITHUB_OAUTH_SCOPE', trim(libreclaude_env('GITHUB_OAUTH_SCOPE', '')));
 
 // Modèles organisés par catégorie
 define('MISTRAL_MODELS', [
