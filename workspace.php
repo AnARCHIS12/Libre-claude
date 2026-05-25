@@ -158,6 +158,36 @@ function github_user_repos($token, &$error) {
     return $data;
 }
 
+function workspace_load_coder_state($db, $userId, $github) {
+    if (!$github || empty($github['owner']) || empty($github['repo'])) return null;
+    return $db->fetch(
+        "SELECT * FROM workspace_coder_states
+         WHERE user_id = ? AND owner = ? AND repo = ? AND branch = ?
+         LIMIT 1",
+        [$userId, $github['owner'], $github['repo'], $github['branch'] ?: 'main']
+    );
+}
+
+function workspace_save_coder_state($db, $userId, $github, $prompt, $contextPaths, $rawReply, $filesJson) {
+    if (!$github || empty($github['owner']) || empty($github['repo'])) return;
+    $branch = $github['branch'] ?: 'main';
+    $db->query(
+        "INSERT OR REPLACE INTO workspace_coder_states
+         (id, user_id, owner, repo, branch, prompt, context_paths, raw_reply, files_json, created_at, updated_at)
+         VALUES (
+            (SELECT id FROM workspace_coder_states WHERE user_id = ? AND owner = ? AND repo = ? AND branch = ?),
+            ?, ?, ?, ?, ?, ?, ?, ?,
+            COALESCE((SELECT created_at FROM workspace_coder_states WHERE user_id = ? AND owner = ? AND repo = ? AND branch = ?), datetime('now')),
+            datetime('now')
+         )",
+        [
+            $userId, $github['owner'], $github['repo'], $branch,
+            $userId, $github['owner'], $github['repo'], $branch, $prompt, $contextPaths, $rawReply, $filesJson,
+            $userId, $github['owner'], $github['repo'], $branch,
+        ]
+    );
+}
+
 function workspace_extract_json_array($text) {
     $text = trim($text);
     if ($text === '') return null;
@@ -399,8 +429,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $aiCodeReply = $rawReply;
             if (!$generated) {
                 $error = $t('ai_coder_error') . ' ' . $apiError;
+                workspace_save_coder_state($db, $user['id'], $github, $aiPrompt, $aiContextPaths, $aiCodeReply, '');
             } else {
                 $aiFilesDraft = json_encode($generated, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                workspace_save_coder_state($db, $user['id'], $github, $aiPrompt, $aiContextPaths, $aiCodeReply, $aiFilesDraft);
                 $success = $t('ai_coder_ready');
             }
         }
@@ -469,6 +501,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $github && !empty($github['owner']) && !empty($github['repo'])) {
+    $savedCoderState = workspace_load_coder_state($db, $user['id'], $github);
+    if ($savedCoderState) {
+        $aiPrompt = (string)($savedCoderState['prompt'] ?? '');
+        $aiContextPaths = (string)($savedCoderState['context_paths'] ?? '');
+        $aiCodeReply = (string)($savedCoderState['raw_reply'] ?? '');
+        $aiFilesDraft = (string)($savedCoderState['files_json'] ?? '');
     }
 }
 

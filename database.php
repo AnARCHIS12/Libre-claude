@@ -126,6 +126,20 @@ class Database {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS workspace_coder_states (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            owner TEXT NOT NULL,
+            repo TEXT NOT NULL,
+            branch TEXT DEFAULT 'main',
+            prompt TEXT,
+            context_paths TEXT,
+            raw_reply TEXT,
+            files_json TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS user_memories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -143,6 +157,7 @@ class Database {
         CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
         CREATE INDEX IF NOT EXISTS idx_workspace_files_user ON workspace_files(user_id, updated_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_coder_state_repo ON workspace_coder_states(user_id, owner, repo, branch);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_user_memories_hash ON user_memories(user_id, scope, key_hash);
         CREATE INDEX IF NOT EXISTS idx_user_memories_user ON user_memories(user_id, scope, updated_at);
         ";
