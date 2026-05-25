@@ -16,6 +16,10 @@
   <img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-e6122a?style=for-the-badge">
 </p>
 
+<p align="center">
+  Merci à <a href="https://github.com/LaurentVoanh">LaurentVoanh</a> pour ce projet génial.
+</p>
+
 ---
 
 ## Aperçu
@@ -23,6 +27,10 @@
 **Libre Claude** est une interface conversationnelle web inspirée des assistants IA modernes, conçue pour tourner sur un hébergement mutualisé type Hostinger.
 
 Le projet utilise PHP pur, SQLite, cURL et des modèles affichés dans l'interface comme des modèles Claude. Il inclut une installation initiale, une authentification, un historique de conversations, une rotation des clés API et une interface responsive rouge/noir.
+
+<p align="center">
+  <img src="home.png" alt="Aperçu de l'interface Libre Claude" width="920">
+</p>
 
 ## Fonctionnalités
 
