@@ -99,6 +99,17 @@ function workspace_github_path($path) {
     return implode('/', array_map('rawurlencode', $parts));
 }
 
+function workspace_clean_path($path) {
+    $path = str_replace('\\', '/', trim((string)$path));
+    $parts = [];
+    foreach (explode('/', trim($path, '/')) as $part) {
+        if ($part === '' || $part === '.') continue;
+        if ($part === '..') continue;
+        $parts[] = $part;
+    }
+    return implode('/', $parts);
+}
+
 function workspace_github_tree($owner, $repo, $branch, $token, &$error) {
     $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
         . '/git/trees/' . rawurlencode($branch ?: 'main') . '?recursive=1';
@@ -131,6 +142,7 @@ function workspace_github_get_file($owner, $repo, $branch, $path, $token, &$erro
 }
 
 function workspace_github_save_file($owner, $repo, $branch, $path, $content, $message, $token, &$error) {
+    $path = workspace_clean_path($path);
     $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
         . '/contents/' . workspace_github_path($path);
     $body = [
@@ -143,7 +155,7 @@ function workspace_github_save_file($owner, $repo, $branch, $path, $content, $me
 
 function workspace_github_create_initial_file($owner, $repo, $branch, $path, $content, $message, $token, &$error) {
     $initial = workspace_github_save_file($owner, $repo, $branch ?: 'main', $path, $content, $message, $token, $error);
-    if ($initial || stripos($error, 'HTTP 422') === false) return $initial;
+    if ($initial || (stripos($error, 'HTTP 422') === false && stripos($error, 'HTTP 404') === false)) return $initial;
     return workspace_github_save_file($owner, $repo, '', $path, $content, $message, $token, $error);
 }
 
@@ -152,7 +164,7 @@ function workspace_clean_files($items) {
     $files = [];
     foreach ($items as $item) {
         if (!is_array($item)) continue;
-        $path = trim($item['path'] ?? '');
+        $path = workspace_clean_path($item['path'] ?? '');
         if ($path === '' || !array_key_exists('content', $item)) continue;
         $files[] = ['path' => $path, 'content' => (string)$item['content']];
     }

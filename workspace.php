@@ -87,6 +87,17 @@ function github_path_url($path) {
     return implode('/', array_map('rawurlencode', $parts));
 }
 
+function github_clean_path($path) {
+    $path = str_replace('\\', '/', trim((string)$path));
+    $parts = [];
+    foreach (explode('/', trim($path, '/')) as $part) {
+        if ($part === '' || $part === '.') continue;
+        if ($part === '..') continue;
+        $parts[] = $part;
+    }
+    return implode('/', $parts);
+}
+
 function github_tree($owner, $repo, $branch, $token, &$error) {
     if (!$owner || !$repo) return [];
     $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
@@ -122,6 +133,7 @@ function github_get_file($owner, $repo, $branch, $path, $token, &$error) {
 }
 
 function github_save_file($owner, $repo, $branch, $path, $content, $message, $sha, $token, &$error) {
+    $path = github_clean_path($path);
     $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
         . '/contents/' . github_path_url($path);
     $body = [
@@ -135,7 +147,7 @@ function github_save_file($owner, $repo, $branch, $path, $content, $message, $sh
 
 function github_create_initial_file($owner, $repo, $branch, $path, $content, $message, $token, &$error) {
     $initial = github_save_file($owner, $repo, $branch ?: 'main', $path, $content, $message, '', $token, $error);
-    if ($initial || stripos($error, 'HTTP 422') === false) return $initial;
+    if ($initial || (stripos($error, 'HTTP 422') === false && stripos($error, 'HTTP 404') === false)) return $initial;
     return github_save_file($owner, $repo, '', $path, $content, $message, '', $token, $error);
 }
 
@@ -310,7 +322,7 @@ function github_commit_files($owner, $repo, $branch, $files, $message, $token, &
     $cleanFiles = [];
     $treeItems = [];
     foreach ($files as $file) {
-        $path = trim($file['path'] ?? '');
+        $path = github_clean_path($file['path'] ?? '');
         if ($path === '' || !array_key_exists('content', $file)) continue;
         $cleanFiles[] = ['path' => $path, 'content' => (string)$file['content']];
         $treeItems[] = [
@@ -1162,9 +1174,79 @@ function markdownToHtml(markdown) {
   return html || '<p></p>';
 }
 
-function buildPreviewDoc(lang, code) {
+function previewNormalizePath(path) {
+  const parts = [];
+  String(path || '').replace(/^\/+/, '').split('/').forEach(part => {
+    if (!part || part === '.') return;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  });
+  return parts.join('/');
+}
+
+function previewDirname(path) {
+  const normalized = previewNormalizePath(path);
+  const index = normalized.lastIndexOf('/');
+  return index === -1 ? '' : normalized.slice(0, index + 1);
+}
+
+function previewMime(path) {
+  const ext = String(path || '').split('.').pop().toLowerCase();
+  if (ext === 'svg') return 'image/svg+xml';
+  if (ext === 'png') return 'image/png';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'gif') return 'image/gif';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'ico') return 'image/x-icon';
+  return 'text/plain';
+}
+
+function previewAssetContent(files, currentPath, ref) {
+  ref = String(ref || '').trim();
+  if (!ref || /^(?:[a-z][a-z0-9+.-]*:|#)/i.test(ref)) return null;
+  const cleanRef = ref.split('#')[0].split('?')[0];
+  const dir = previewDirname(currentPath);
+  const candidates = [
+    previewNormalizePath(cleanRef),
+    previewNormalizePath(dir + cleanRef),
+  ];
+  if (previewNormalizePath(currentPath).startsWith('public/')) {
+    candidates.push(previewNormalizePath('public/' + cleanRef.replace(/^\/+/, '')));
+  }
+  const match = (files || []).find(file => candidates.includes(previewNormalizePath(file.path)));
+  return match ? String(match.content || '') : null;
+}
+
+function buildHtmlProjectPreview(code, currentPath, files) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(String(code || ''), 'text/html');
+  doc.querySelectorAll('link[rel~="stylesheet"][href]').forEach(link => {
+    const css = previewAssetContent(files, currentPath, link.getAttribute('href'));
+    if (css === null) return;
+    const style = doc.createElement('style');
+    style.textContent = css;
+    link.replaceWith(style);
+  });
+  doc.querySelectorAll('script[src]').forEach(script => {
+    const js = previewAssetContent(files, currentPath, script.getAttribute('src'));
+    if (js === null) return;
+    const inline = doc.createElement('script');
+    inline.textContent = js;
+    script.replaceWith(inline);
+  });
+  doc.querySelectorAll('img[src]').forEach(img => {
+    const content = previewAssetContent(files, currentPath, img.getAttribute('src'));
+    if (content === null) return;
+    const path = img.getAttribute('src').split('#')[0].split('?')[0];
+    img.setAttribute('src', 'data:' + previewMime(path) + ';base64,' + btoa(unescape(encodeURIComponent(content))));
+  });
+  return '<!doctype html>\n' + doc.documentElement.outerHTML;
+}
+
+function buildPreviewDoc(lang, code, currentPath = '', files = []) {
   lang = String(lang || '').toLowerCase();
-  if (lang === 'html' || lang === 'svg') return code;
+  if (lang === 'html') return buildHtmlProjectPreview(code, currentPath, files);
+  if (lang === 'svg') return code;
   if (lang === 'css') return '<!doctype html><html><head><style>' + code + '</style></head><body><main class="preview-root"><?= htmlspecialchars($t('css_preview_label')) ?></main></body></html>';
   if (lang === 'js' || lang === 'javascript') return '<!doctype html><html><body><main id="app"></main><script>' + code.replace(/<\/script/gi, '<\\/script') + '<\/script></body></html>';
   if (lang === 'md' || lang === 'markdown') {
@@ -1217,7 +1299,7 @@ function parseGeneratedFiles() {
 
 function fileKind(path) {
   const ext = String(path || '').split('.').pop().toLowerCase();
-  if (ext === 'html' || ext === 'htm') return 'html';
+  if (ext === 'html' || ext === 'htm' || ext === 'hmtl') return 'html';
   if (ext === 'md' || ext === 'markdown') return 'markdown';
   if (ext === 'css') return 'css';
   if (ext === 'js' || ext === 'mjs') return 'javascript';
@@ -1299,7 +1381,7 @@ function renderGeneratedReview() {
 
   code.textContent = formatGeneratedLog(file);
   diff.textContent = formatGeneratedDiff(file);
-  frame.srcdoc = buildPreviewDoc(fileKind(file.path), file.content);
+  frame.srcdoc = buildPreviewDoc(fileKind(file.path), file.content, file.path, generatedFiles);
   code.hidden = reviewTab !== 'log';
   diff.hidden = reviewTab !== 'diff';
   frame.hidden = reviewTab !== 'preview';
