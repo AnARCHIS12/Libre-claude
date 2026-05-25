@@ -140,6 +140,13 @@ function github_create_repo($name, $description, $private, $token, &$error) {
     return github_api_request('POST', 'https://api.github.com/user/repos', $token, $body, $error);
 }
 
+function github_create_repo_error_message($apiError, $t) {
+    if (stripos($apiError, 'Resource not accessible by integration') !== false) {
+        return $t('repo_create_error') . ' ' . $t('github_repo_create_permission_error') . ' ' . $apiError;
+    }
+    return $t('repo_create_error') . ' ' . $apiError;
+}
+
 function github_user_repos($token, &$error) {
     if (!$token) return [];
     $url = 'https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member';
@@ -320,7 +327,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $apiError = '';
             $created = github_create_repo($repoName, $description, $isPrivate, $token, $apiError);
             if (!$created) {
-                $error = $t('repo_create_error') . ' ' . $apiError;
+                $error = github_create_repo_error_message($apiError, $t);
             } else {
                 $owner = $created['owner']['login'] ?? '';
                 $repo = $created['name'] ?? $repoName;
@@ -749,6 +756,9 @@ label{display:block;font-size:12px;color:var(--muted);margin:12px 0 7px}
           <input name="repo_name" placeholder="libre-claude-app">
           <label><?= htmlspecialchars($t('repo_description')) ?></label>
           <input name="repo_description" placeholder="<?= htmlspecialchars($t('repo_description_placeholder')) ?>">
+          <label><?= htmlspecialchars($t('github_create_token')) ?></label>
+          <input type="password" name="create_token" autocomplete="off" placeholder="<?= htmlspecialchars($t('github_create_token_placeholder')) ?>">
+          <p class="hint"><?= htmlspecialchars($t('github_create_token_hint')) ?></p>
           <label class="inline-check"><input type="checkbox" name="private" value="1"> <?= htmlspecialchars($t('private_repo')) ?></label>
           <button class="btn" type="submit"><i class="fa-brands fa-github"></i><?= htmlspecialchars($t('create_repo')) ?></button>
         </form>
