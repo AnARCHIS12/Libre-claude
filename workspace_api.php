@@ -111,15 +111,33 @@ function workspace_clean_path($path) {
 }
 
 function workspace_github_tree($owner, $repo, $branch, $token, &$error) {
-    $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
-        . '/git/trees/' . rawurlencode($branch ?: 'main') . '?recursive=1';
+    $repoBase = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo);
+    $url = $repoBase . '/git/trees/' . rawurlencode($branch ?: 'main') . '?recursive=1';
     $data = workspace_github_request('GET', $url, $token, null, $error);
     if (!$data && (stripos($error, 'Git Repository is empty') !== false || stripos($error, 'HTTP 409') !== false)) {
         $error = '';
         return [];
     }
+    if (!$data && stripos($error, 'HTTP 404') !== false) {
+        $defaultError = '';
+        $defaultBranch = workspace_github_default_branch($owner, $repo, $token, $defaultError);
+        if ($defaultBranch !== '' && $defaultBranch !== ($branch ?: 'main')) {
+            $data = workspace_github_request('GET', $repoBase . '/git/trees/' . rawurlencode($defaultBranch) . '?recursive=1', $token, null, $error);
+        }
+    }
     if (!$data || !isset($data['tree']) || !is_array($data['tree'])) return [];
     return array_values(array_filter($data['tree'], fn($item) => ($item['type'] ?? '') === 'blob'));
+}
+
+function workspace_github_default_branch($owner, $repo, $token, &$error) {
+    $data = workspace_github_request(
+        'GET',
+        'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo),
+        $token,
+        null,
+        $error
+    );
+    return is_array($data) && !empty($data['default_branch']) ? (string)$data['default_branch'] : '';
 }
 
 function workspace_publish_error_message($error) {
@@ -130,9 +148,17 @@ function workspace_publish_error_message($error) {
 }
 
 function workspace_github_get_file($owner, $repo, $branch, $path, $token, &$error) {
-    $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
+    $repoBase = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo);
+    $url = $repoBase
         . '/contents/' . workspace_github_path($path) . '?ref=' . rawurlencode($branch ?: 'main');
     $data = workspace_github_request('GET', $url, $token, null, $error);
+    if (!$data && stripos($error, 'HTTP 404') !== false) {
+        $defaultError = '';
+        $defaultBranch = workspace_github_default_branch($owner, $repo, $token, $defaultError);
+        if ($defaultBranch !== '' && $defaultBranch !== ($branch ?: 'main')) {
+            $data = workspace_github_request('GET', $repoBase . '/contents/' . workspace_github_path($path) . '?ref=' . rawurlencode($defaultBranch), $token, null, $error);
+        }
+    }
     if (!$data || !isset($data['content'])) return null;
     $content = base64_decode(str_replace(["\r", "\n"], '', $data['content']));
     return [
@@ -194,6 +220,19 @@ function workspace_commit_files($owner, $repo, $branch, $files, $message, $token
     $refError = '';
     $ref = workspace_github_request('GET', $refUrl, $token, null, $refError);
     $isEmptyRepo = !$ref && (stripos($refError, 'Git Repository is empty') !== false || stripos($refError, 'HTTP 409') !== false);
+    if (!$ref && !$isEmptyRepo && stripos($refError, 'HTTP 404') !== false) {
+        $defaultError = '';
+        $defaultBranch = workspace_github_default_branch($owner, $repo, $token, $defaultError);
+        if ($defaultBranch !== '' && $defaultBranch !== $branch) {
+            $branch = $defaultBranch;
+            $refUrl = $repoBase . '/git/ref/heads/' . rawurlencode($branch);
+            $refError = '';
+            $ref = workspace_github_request('GET', $refUrl, $token, null, $refError);
+            $isEmptyRepo = !$ref && (stripos($refError, 'Git Repository is empty') !== false || stripos($refError, 'HTTP 409') !== false);
+        } elseif ($defaultError !== '') {
+            $refError = $refError . ' - ' . $defaultError;
+        }
+    }
     $parentSha = '';
     $baseTreeSha = '';
 
