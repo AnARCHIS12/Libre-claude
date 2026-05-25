@@ -687,8 +687,8 @@ select,.branch-input,input,textarea{background:#0d0d15;color:var(--text);border-
   </aside>
 
   <main class="main">
-    <div class="top-actions" <?= $aiFilesDraft === '' ? 'hidden' : '' ?>>
-      <button class="pill-btn" type="button" onclick="publishGenerated()"><i class="fa-brands fa-github"></i> Publier GitHub</button>
+    <div class="top-actions">
+      <button class="pill-btn" type="button" onclick="openWorkspaceEnvironment()"><i class="fa-solid fa-sliders"></i> Environnement</button>
     </div>
 
     <div class="coder-shell <?= $aiPrompt ? 'coder-active' : '' ?>">
@@ -1077,6 +1077,11 @@ function setWorkspaceTab(name) {
   document.querySelectorAll('.tab-panel').forEach(panel => {
     panel.classList.toggle('active', panel.id === 'workspace-tab-' + name);
   });
+}
+
+function openWorkspaceEnvironment() {
+  setWorkspaceTab('settings');
+  document.getElementById('workspace-tab-settings')?.scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 document.querySelectorAll('[data-workspace-tab]').forEach(btn => {
