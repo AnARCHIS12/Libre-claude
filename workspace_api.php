@@ -111,6 +111,13 @@ function workspace_github_tree($owner, $repo, $branch, $token, &$error) {
     return array_values(array_filter($data['tree'], fn($item) => ($item['type'] ?? '') === 'blob'));
 }
 
+function workspace_publish_error_message($error) {
+    if (stripos($error, 'Resource not accessible by integration') !== false) {
+        return 'GitHub refuse l écriture avec ce jeton. Activez Repository permissions > Contents: Read and write dans la GitHub App, vérifiez que l app est installée sur ce dépôt, puis reconnectez GitHub dans Libre Claude. ' . $error;
+    }
+    return $error;
+}
+
 function workspace_github_get_file($owner, $repo, $branch, $path, $token, &$error) {
     $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
         . '/contents/' . workspace_github_path($path) . '?ref=' . rawurlencode($branch ?: 'main');
@@ -301,7 +308,7 @@ if (!$files) {
 $commitError = '';
 $commit = workspace_commit_files($owner, $repo, $branch, $files, trim($input['commit_message'] ?? ''), $github['token'], $commitError);
 if (!$commit) {
-    workspace_api_response(502, ['success' => false, 'error' => $commitError]);
+    workspace_api_response(502, ['success' => false, 'error' => workspace_publish_error_message($commitError)]);
 }
 
 workspace_api_response(200, [

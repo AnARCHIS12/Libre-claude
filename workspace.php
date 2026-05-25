@@ -150,6 +150,13 @@ function github_create_repo_error_message($apiError, $t) {
     return $t('repo_create_error') . ' ' . $apiError;
 }
 
+function github_publish_error_message($apiError, $t) {
+    if (stripos($apiError, 'Resource not accessible by integration') !== false) {
+        return $t('multi_file_error') . ' GitHub refuse l écriture avec ce jeton. Dans votre GitHub App, activez Repository permissions > Contents: Read and write, vérifiez que l app est installée sur ce dépôt, puis reconnectez GitHub dans Libre Claude. ' . $apiError;
+    }
+    return $t('multi_file_error') . ' ' . $apiError;
+}
+
 function github_user_repos($token, &$error) {
     if (!$token) return [];
     $url = 'https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member';
@@ -494,7 +501,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $apiError = '';
                     $committed = github_commit_files($github['owner'], $github['repo'], $github['branch'], $filesToCommit, $message, $github['token'], $apiError);
                     if (!$committed) {
-                        $error = $t('multi_file_error') . ' ' . $apiError;
+                        $error = github_publish_error_message($apiError, $t);
                     } else {
                         $success = $t('multi_file_saved');
                     }
