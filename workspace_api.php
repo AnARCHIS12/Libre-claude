@@ -103,6 +103,10 @@ function workspace_github_tree($owner, $repo, $branch, $token, &$error) {
     $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
         . '/git/trees/' . rawurlencode($branch ?: 'main') . '?recursive=1';
     $data = workspace_github_request('GET', $url, $token, null, $error);
+    if (!$data && (stripos($error, 'Git Repository is empty') !== false || stripos($error, 'HTTP 409') !== false)) {
+        $error = '';
+        return [];
+    }
     if (!$data || !isset($data['tree']) || !is_array($data['tree'])) return [];
     return array_values(array_filter($data['tree'], fn($item) => ($item['type'] ?? '') === 'blob'));
 }
@@ -133,17 +137,6 @@ function workspace_clean_files($items) {
 
 function workspace_commit_files($owner, $repo, $branch, $files, $message, $token, &$error) {
     $branch = $branch ?: 'main';
-    $refUrl = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
-        . '/git/ref/heads/' . rawurlencode($branch);
-    $ref = workspace_github_request('GET', $refUrl, $token, null, $error);
-    if (!$ref || empty($ref['object']['sha'])) return null;
-
-    $parentSha = $ref['object']['sha'];
-    $commitUrl = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
-        . '/git/commits/' . rawurlencode($parentSha);
-    $parentCommit = workspace_github_request('GET', $commitUrl, $token, null, $error);
-    if (!$parentCommit || empty($parentCommit['tree']['sha'])) return null;
-
     $treeItems = [];
     foreach ($files as $file) {
         $treeItems[] = [
@@ -158,23 +151,48 @@ function workspace_commit_files($owner, $repo, $branch, $files, $message, $token
         return null;
     }
 
-    $tree = workspace_github_request('POST', 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/git/trees', $token, [
-        'base_tree' => $parentCommit['tree']['sha'],
-        'tree' => $treeItems,
-    ], $error);
+    $repoBase = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo);
+    $refUrl = $repoBase . '/git/ref/heads/' . rawurlencode($branch);
+    $refError = '';
+    $ref = workspace_github_request('GET', $refUrl, $token, null, $refError);
+    $isEmptyRepo = !$ref && (stripos($refError, 'Git Repository is empty') !== false || stripos($refError, 'HTTP 409') !== false);
+    $parentSha = '';
+    $baseTreeSha = '';
+
+    if (!$isEmptyRepo) {
+        if (!$ref || empty($ref['object']['sha'])) {
+            $error = $refError ?: 'Branche GitHub introuvable';
+            return null;
+        }
+        $parentSha = $ref['object']['sha'];
+        $parentCommit = workspace_github_request('GET', $repoBase . '/git/commits/' . rawurlencode($parentSha), $token, null, $error);
+        if (!$parentCommit || empty($parentCommit['tree']['sha'])) return null;
+        $baseTreeSha = $parentCommit['tree']['sha'];
+    }
+
+    $treeBody = ['tree' => $treeItems];
+    if ($baseTreeSha !== '') $treeBody['base_tree'] = $baseTreeSha;
+    $tree = workspace_github_request('POST', $repoBase . '/git/trees', $token, $treeBody, $error);
     if (!$tree || empty($tree['sha'])) return null;
 
-    $commit = workspace_github_request('POST', 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/git/commits', $token, [
+    $commit = workspace_github_request('POST', $repoBase . '/git/commits', $token, [
         'message' => $message ?: 'Update files from Libre Claude Coder',
         'tree' => $tree['sha'],
-        'parents' => [$parentSha],
+        'parents' => $parentSha !== '' ? [$parentSha] : [],
     ], $error);
     if (!$commit || empty($commit['sha'])) return null;
 
-    $updated = workspace_github_request('PATCH', $refUrl, $token, [
-        'sha' => $commit['sha'],
-        'force' => false,
-    ], $error);
+    if ($isEmptyRepo) {
+        $updated = workspace_github_request('POST', $repoBase . '/git/refs', $token, [
+            'ref' => 'refs/heads/' . $branch,
+            'sha' => $commit['sha'],
+        ], $error);
+    } else {
+        $updated = workspace_github_request('PATCH', $refUrl, $token, [
+            'sha' => $commit['sha'],
+            'force' => false,
+        ], $error);
+    }
     if (!$updated) return null;
 
     return [

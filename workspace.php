@@ -94,6 +94,9 @@ function github_tree($owner, $repo, $branch, $token, &$error) {
 
     $data = github_api_request('GET', $url, $token, null, $error);
     if (!$data) {
+        if (stripos($error, 'Git Repository is empty') !== false || stripos($error, 'HTTP 409') !== false) {
+            $error = '';
+        }
         return [];
     }
 
@@ -237,17 +240,6 @@ function workspace_ai_code($instruction, $contextFiles, $repoFiles, $user, &$raw
 
 function github_commit_files($owner, $repo, $branch, $files, $message, $token, &$error) {
     $branch = $branch ?: 'main';
-    $refUrl = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
-        . '/git/ref/heads/' . rawurlencode($branch);
-    $ref = github_api_request('GET', $refUrl, $token, null, $error);
-    if (!$ref || empty($ref['object']['sha'])) return null;
-
-    $parentSha = $ref['object']['sha'];
-    $commitUrl = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
-        . '/git/commits/' . rawurlencode($parentSha);
-    $parentCommit = github_api_request('GET', $commitUrl, $token, null, $error);
-    if (!$parentCommit || empty($parentCommit['tree']['sha'])) return null;
-
     $treeItems = [];
     foreach ($files as $file) {
         $path = trim($file['path'] ?? '');
@@ -264,19 +256,44 @@ function github_commit_files($owner, $repo, $branch, $files, $message, $token, &
         return null;
     }
 
-    $treeUrl = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/git/trees';
-    $tree = github_api_request('POST', $treeUrl, $token, [
-        'base_tree' => $parentCommit['tree']['sha'],
-        'tree' => $treeItems,
-    ], $error);
+    $repoBase = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo);
+    $refUrl = $repoBase . '/git/ref/heads/' . rawurlencode($branch);
+    $refError = '';
+    $ref = github_api_request('GET', $refUrl, $token, null, $refError);
+    $isEmptyRepo = !$ref && (stripos($refError, 'Git Repository is empty') !== false || stripos($refError, 'HTTP 409') !== false);
+    $parentSha = '';
+    $baseTreeSha = '';
+
+    if (!$isEmptyRepo) {
+        if (!$ref || empty($ref['object']['sha'])) {
+            $error = $refError ?: 'Branche GitHub introuvable';
+            return null;
+        }
+        $parentSha = $ref['object']['sha'];
+        $parentCommit = github_api_request('GET', $repoBase . '/git/commits/' . rawurlencode($parentSha), $token, null, $error);
+        if (!$parentCommit || empty($parentCommit['tree']['sha'])) return null;
+        $baseTreeSha = $parentCommit['tree']['sha'];
+    }
+
+    $treeBody = ['tree' => $treeItems];
+    if ($baseTreeSha !== '') $treeBody['base_tree'] = $baseTreeSha;
+    $tree = github_api_request('POST', $repoBase . '/git/trees', $token, $treeBody, $error);
     if (!$tree || empty($tree['sha'])) return null;
 
-    $newCommit = github_api_request('POST', 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo) . '/git/commits', $token, [
+    $commitBody = [
         'message' => $message ?: 'Update files from Libre Claude',
         'tree' => $tree['sha'],
-        'parents' => [$parentSha],
-    ], $error);
+        'parents' => $parentSha !== '' ? [$parentSha] : [],
+    ];
+    $newCommit = github_api_request('POST', $repoBase . '/git/commits', $token, $commitBody, $error);
     if (!$newCommit || empty($newCommit['sha'])) return null;
+
+    if ($isEmptyRepo) {
+        return github_api_request('POST', $repoBase . '/git/refs', $token, [
+            'ref' => 'refs/heads/' . $branch,
+            'sha' => $newCommit['sha'],
+        ], $error);
+    }
 
     return github_api_request('PATCH', $refUrl, $token, [
         'sha' => $newCommit['sha'],
