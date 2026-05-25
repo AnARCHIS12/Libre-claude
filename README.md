@@ -244,6 +244,7 @@ cp .env.example .env
 2. Renseignez OAuth GitHub dans `.env` si vous voulez activer `Se connecter avec GitHub` :
 
 ```env
+PUBLIC_URL=https://votre-domaine.com
 GITHUB_OAUTH_CLIENT_ID=votre_client_id
 GITHUB_OAUTH_CLIENT_SECRET=votre_client_secret
 ```
@@ -276,6 +277,7 @@ docker run -d \
   -p 8173:80 \
   -v "$PWD/data:/var/www/html/data" \
   -v "$PWD/sandbox:/var/www/html/sandbox" \
+  -e PUBLIC_URL="https://votre-domaine.com" \
   -e GITHUB_OAUTH_CLIENT_ID="votre_client_id" \
   -e GITHUB_OAUTH_CLIENT_SECRET="votre_client_secret" \
   libre-claude:local
@@ -417,6 +419,7 @@ Authorization callback URL: https://votre-domaine.com/github_oauth.php
 Renseignez ensuite `config.php` :
 
 ```php
+define('PUBLIC_URL', 'https://votre-domaine.com');
 define('GITHUB_OAUTH_CLIENT_ID', 'votre_client_id');
 define('GITHUB_OAUTH_CLIENT_SECRET', 'votre_client_secret');
 ```
@@ -426,9 +429,12 @@ define('GITHUB_OAUTH_CLIENT_SECRET', 'votre_client_secret');
 Renseignez `.env` :
 
 ```env
+PUBLIC_URL=https://votre-domaine.com
 GITHUB_OAUTH_CLIENT_ID=votre_client_id
 GITHUB_OAUTH_CLIENT_SECRET=votre_client_secret
 ```
+
+`PUBLIC_URL` force l'URL publique utilisée pour OAuth. Elle est recommandée derrière un reverse proxy HTTPS, par exemple Dockhand, Traefik, Nginx Proxy Manager ou Cloudflare Tunnel.
 
 Puis relancez :
 

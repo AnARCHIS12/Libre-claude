@@ -2,6 +2,7 @@ param(
     [string]$Dir = $(if ($env:LIBRE_CLAUDE_DIR) { $env:LIBRE_CLAUDE_DIR } else { Join-Path $HOME "libre-claude" }),
     [int]$Port = $(if ($env:LIBRE_CLAUDE_PORT) { [int]$env:LIBRE_CLAUDE_PORT } else { 8173 }),
     [string]$Image = $(if ($env:LIBRE_CLAUDE_IMAGE) { $env:LIBRE_CLAUDE_IMAGE } else { "liberchat/libre-claude:latest" }),
+    [string]$PublicUrl = $(if ($env:PUBLIC_URL) { $env:PUBLIC_URL } else { "" }),
     [string]$GitHubOAuthClientId = $(if ($env:GITHUB_OAUTH_CLIENT_ID) { $env:GITHUB_OAUTH_CLIENT_ID } else { "" }),
     [string]$GitHubOAuthClientSecret = $(if ($env:GITHUB_OAUTH_CLIENT_SECRET) { $env:GITHUB_OAUTH_CLIENT_SECRET } else { "" }),
     [switch]$Yes,
@@ -159,6 +160,7 @@ if (-not $Yes) {
     $Dir = Ask-Value "Dossier d'installation" $Dir
     $Port = [int](Ask-Value "Port web local" $Port)
     $Image = Ask-Value "Image Docker" $Image
+    $PublicUrl = Ask-Value "URL publique de l'app" $PublicUrl
 
     if (Ask-YesNo "Configurer GitHub OAuth maintenant ?" $false) {
         $GitHubOAuthClientId = Ask-Value "GitHub OAuth Client ID" $GitHubOAuthClientId
@@ -180,6 +182,7 @@ Write-Host "Configuration:"
 Write-Host "  Dossier : $Dir"
 Write-Host "  Port    : $Port"
 Write-Host "  Image   : $Image"
+Write-Host "  URL     : $(if ($PublicUrl) { $PublicUrl } else { "auto" })"
 Write-Host "  OAuth   : $oauthState"
 Write-Host "  Lancer  : $startState"
 
@@ -210,6 +213,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $Dir "data") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $Dir "sandbox") | Out-Null
 
 @"
+PUBLIC_URL=$PublicUrl
 GITHUB_OAUTH_CLIENT_ID=$GitHubOAuthClientId
 GITHUB_OAUTH_CLIENT_SECRET=$GitHubOAuthClientSecret
 "@ | Set-Content -Encoding UTF8 -Path (Join-Path $Dir ".env")
@@ -223,6 +227,7 @@ services:
     env_file:
       - .env
     environment:
+      PUBLIC_URL: `${PUBLIC_URL:-}
       GITHUB_OAUTH_CLIENT_ID: `${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: `${GITHUB_OAUTH_CLIENT_SECRET:-}
     volumes:

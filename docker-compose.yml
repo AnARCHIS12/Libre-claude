@@ -7,10 +7,10 @@ services:
     ports:
       - "8173:80"
     environment:
+      PUBLIC_URL: ${PUBLIC_URL:-}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
     volumes:
       - ./data:/var/www/html/data
       - ./sandbox:/var/www/html/sandbox
     restart: unless-stopped
-

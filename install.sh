@@ -9,6 +9,7 @@ DEFAULT_PORT="8173"
 INSTALL_DIR="${LIBRE_CLAUDE_DIR:-$DEFAULT_DIR}"
 IMAGE="${LIBRE_CLAUDE_IMAGE:-$DEFAULT_IMAGE}"
 PORT="${LIBRE_CLAUDE_PORT:-$DEFAULT_PORT}"
+PUBLIC_URL_VALUE="${PUBLIC_URL:-}"
 CLIENT_ID="${GITHUB_OAUTH_CLIENT_ID:-}"
 CLIENT_SECRET="${GITHUB_OAUTH_CLIENT_SECRET:-}"
 YES="${LIBRE_CLAUDE_YES:-0}"
@@ -55,6 +56,7 @@ Variables d'environnement:
   LIBRE_CLAUDE_DIR=/opt/libre-claude
   LIBRE_CLAUDE_PORT=8173
   LIBRE_CLAUDE_IMAGE=liberchat/libre-claude:latest
+  PUBLIC_URL=https://libre-claude.example.com
   GITHUB_OAUTH_CLIENT_ID=...
   GITHUB_OAUTH_CLIENT_SECRET=...
   LIBRE_CLAUDE_YES=1
@@ -274,6 +276,7 @@ if has_tty; then
   INSTALL_DIR="$(ask_value "Dossier d'installation" "$INSTALL_DIR")"
   PORT="$(ask_value "Port web local" "$PORT")"
   IMAGE="$(ask_value "Image Docker" "$IMAGE")"
+  PUBLIC_URL_VALUE="$(ask_value "URL publique de l'app" "$PUBLIC_URL_VALUE")"
   if ask_yes_no "Configurer GitHub OAuth maintenant ?" "no"; then
     CLIENT_ID="$(ask_value "GitHub OAuth Client ID" "$CLIENT_ID")"
     CLIENT_SECRET="$(ask_secret "GitHub OAuth Client Secret" "$CLIENT_SECRET")"
@@ -295,6 +298,7 @@ Configuration:
   Dossier : $INSTALL_DIR
   Port    : $PORT
   Image   : $IMAGE
+  URL     : $(if [ -n "$PUBLIC_URL_VALUE" ]; then printf '%s' "$PUBLIC_URL_VALUE"; else printf 'auto'; fi)
   OAuth   : $(if [ -n "$CLIENT_ID" ] && [ -n "$CLIENT_SECRET" ]; then printf 'activé'; else printf 'désactivé'; fi)
   Lancer  : $(if [ "$NO_START" = "1" ]; then printf 'non'; else printf 'oui'; fi)
 EOF
@@ -324,6 +328,7 @@ fi
 mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/sandbox"
 
 cat > "$INSTALL_DIR/.env" <<EOF
+PUBLIC_URL=$PUBLIC_URL_VALUE
 GITHUB_OAUTH_CLIENT_ID=$CLIENT_ID
 GITHUB_OAUTH_CLIENT_SECRET=$CLIENT_SECRET
 EOF
@@ -337,6 +342,7 @@ services:
     env_file:
       - .env
     environment:
+      PUBLIC_URL: \${PUBLIC_URL:-}
       GITHUB_OAUTH_CLIENT_ID: \${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: \${GITHUB_OAUTH_CLIENT_SECRET:-}
     volumes:

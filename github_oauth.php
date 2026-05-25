@@ -25,10 +25,28 @@ if ($clientId === '' || $clientSecret === '') {
 }
 
 function github_oauth_redirect_uri() {
+    if (defined('PUBLIC_URL') && PUBLIC_URL !== '') {
+        return rtrim(PUBLIC_URL, '/') . '/github_oauth.php';
+    }
+
     $scheme = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+        $forwardedProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+        if (in_array($forwardedProto, ['http', 'https'], true)) {
+            $scheme = $forwardedProto;
+        }
+    }
+
+    $host = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $host = trim(explode(',', $host)[0]);
+    $prefix = '';
+    if (!empty($_SERVER['HTTP_X_FORWARDED_PREFIX'])) {
+        $prefix = '/' . trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PREFIX'])[0], '/');
+        if ($prefix === '/') $prefix = '';
+    }
+
     $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
-    return $scheme . '://' . $host . ($base ? $base : '') . '/github_oauth.php';
+    return $scheme . '://' . $host . $prefix . ($base ? $base : '') . '/github_oauth.php';
 }
 
 function github_oauth_post($url, $fields) {

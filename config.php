@@ -35,6 +35,7 @@ define('MISTRAL_TRANSCRIPTION_ENDPOINT', 'https://api.mistral.ai/v1/audio/transc
 // GitHub OAuth (optionnel)
 // Créez une OAuth App GitHub avec comme callback :
 // http(s)://votre-domaine.com/github_oauth.php
+define('PUBLIC_URL', rtrim(libreclaude_env('PUBLIC_URL', ''), '/'));
 define('GITHUB_OAUTH_CLIENT_ID', libreclaude_env('GITHUB_OAUTH_CLIENT_ID', ''));
 define('GITHUB_OAUTH_CLIENT_SECRET', libreclaude_env('GITHUB_OAUTH_CLIENT_SECRET', ''));
 
