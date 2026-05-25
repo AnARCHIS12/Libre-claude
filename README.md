@@ -283,6 +283,24 @@ docker build -t votre-compte/libre-claude:latest .
 docker push votre-compte/libre-claude:latest
 ```
 
+Build et push multi-architecture `linux/amd64` + `linux/arm64` :
+
+```bash
+docker run --privileged --rm tonistiigi/binfmt --install arm64,amd64
+docker buildx create --name libre-claude-multi --driver docker-container --use --bootstrap
+docker buildx build \
+  --builder libre-claude-multi \
+  --platform linux/amd64,linux/arm64 \
+  -t votre-compte/libre-claude:latest \
+  --push .
+```
+
+Vérifier les architectures publiées :
+
+```bash
+docker buildx imagetools inspect votre-compte/libre-claude:latest
+```
+
 Versionner une release :
 
 ```bash
