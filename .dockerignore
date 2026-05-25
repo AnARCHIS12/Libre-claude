@@ -5,7 +5,10 @@ sandbox
 *.sqlite
 *.sqlite-*
 *.log
+Capture*.png
+Capture*.jpg
+Capture*.jpeg
+Capture*.webp
 .env
 Dockerfile
 docker-compose.yml
-
