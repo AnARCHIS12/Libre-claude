@@ -217,6 +217,36 @@ function workspace_extract_json_array($text) {
     return null;
 }
 
+function workspace_clean_generated_files($files) {
+    if (!is_array($files)) return [];
+    $clean = [];
+    foreach ($files as $file) {
+        if (!is_array($file)) continue;
+        $path = trim($file['path'] ?? '');
+        if ($path === '' || !array_key_exists('content', $file)) continue;
+        $clean[] = ['path' => $path, 'content' => (string)$file['content']];
+    }
+    return $clean;
+}
+
+function workspace_generated_files_from_json($filesJson) {
+    $decoded = json_decode((string)$filesJson, true);
+    return workspace_clean_generated_files($decoded);
+}
+
+function workspace_coder_bubble_reply($filesJson, $rawReply, $t) {
+    $files = workspace_generated_files_from_json($filesJson);
+    if (!$files) {
+        return $rawReply;
+    }
+
+    $paths = array_map(fn($file) => '- ' . $file['path'], array_slice($files, 0, 8));
+    $extra = count($files) > 8 ? "\n- +" . (count($files) - 8) . " fichier(s)" : '';
+    return sprintf($t('ai_coder_generated_summary'), count($files))
+        . "\n" . implode("\n", $paths) . $extra
+        . "\n\n" . $t('ai_coder_review_hint');
+}
+
 function workspace_ai_code($instruction, $contextFiles, $repoFiles, $user, &$rawReply, &$error) {
     $treeLines = [];
     foreach (array_slice($repoFiles, 0, 120) as $item) {
@@ -259,13 +289,7 @@ function workspace_ai_code($instruction, $contextFiles, $repoFiles, $user, &$raw
         return null;
     }
 
-    $clean = [];
-    foreach ($files as $file) {
-        if (!is_array($file)) continue;
-        $path = trim($file['path'] ?? '');
-        if ($path === '' || !array_key_exists('content', $file)) continue;
-        $clean[] = ['path' => $path, 'content' => (string)$file['content']];
-    }
+    $clean = workspace_clean_generated_files($files);
 
     if (!$clean) {
         $error = 'Aucun fichier exploitable genere par l IA.';
@@ -553,6 +577,7 @@ if ($github && !empty($github['owner']) && !empty($github['repo']) && $selectedP
     $selectedFile = github_get_file($github['owner'], $github['repo'], $github['branch'], $selectedPath, $github['token'], $selectedError);
     if (!$selectedFile && !$error) $error = $t('file_load_error') . ' ' . $selectedError;
 }
+$aiBubbleReply = workspace_coder_bubble_reply($aiFilesDraft, $aiCodeReply, $t);
 ?>
 <!DOCTYPE html>
 <html lang="<?= htmlspecialchars($lang) ?>">
@@ -790,7 +815,7 @@ select,.branch-input,input,textarea{background:#0d0d15;color:var(--text);border-
           </div>
           <div class="coder-turn">
             <div class="coder-work-label">Work completed <span>· <?= htmlspecialchars(date('H:i')) ?></span></div>
-            <div class="coder-bubble assistant"><?= htmlspecialchars($aiCodeReply ?: $t('ai_coder_ready')) ?></div>
+            <div class="coder-bubble assistant"><?= htmlspecialchars($aiBubbleReply ?: $t('ai_coder_ready')) ?></div>
           </div>
         <?php else: ?>
           <div class="coder-empty">

@@ -256,6 +256,8 @@ define('I18N', [
         'ai_coder_ready' => 'Modifications générées. Relisez puis publiez le commit.',
         'ai_coder_error' => 'Impossible de générer les modifications.',
         'ai_coder_prompt_required' => 'Décrivez la modification à coder.',
+        'ai_coder_generated_summary' => '%d fichier(s) généré(s) par Libre Claude.',
+        'ai_coder_review_hint' => 'Relisez les fichiers dans le panneau à droite, puis publiez le commit quand tout est bon.',
         'ai_raw_reply' => 'Réponse brute IA',
         'review_generated_files' => 'Fichiers générés à relire',
         'multi_file_commit' => 'Commit multi-fichiers',
