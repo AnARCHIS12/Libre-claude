@@ -632,6 +632,8 @@ label{display:block;font-size:12px;color:var(--muted);margin:12px 0 7px}
 .coder-bubble.assistant{background:transparent;color:var(--text);padding-left:0}
 .coder-work-label{display:flex;align-items:center;gap:9px;font-weight:750;color:var(--text);margin:0 0 10px}
 .coder-work-label span{font-weight:500;color:var(--muted);font-size:13px}
+.coder-pending{display:inline-flex;align-items:center;gap:8px;color:var(--muted)}
+.coder-pending i{color:var(--brand)}
 .composer{background:var(--panel);border-color:var(--line);border-radius:22px;box-shadow:var(--shadow)}
 .selectors{grid-template-columns:1fr 128px}
 .select-shell i{color:var(--text)}
@@ -1131,10 +1133,52 @@ document.querySelectorAll('[data-prompt]').forEach(btn => {
 });
 const promptInput = document.getElementById('ai-prompt');
 const sendButton = document.getElementById('code-send');
+const coderForm = document.getElementById('coder-form');
+
+function escapeText(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function showCodingStarted() {
+  const prompt = promptInput.value.trim();
+  if (!prompt) return;
+  const shell = document.querySelector('.coder-shell');
+  const thread = document.querySelector('.coder-thread');
+  const topActions = document.querySelector('.top-actions');
+  if (shell) {
+    shell.classList.add('coder-active');
+    shell.classList.remove('environment-open');
+  }
+  if (thread) {
+    thread.innerHTML = `
+      <div class="coder-turn">
+        <div class="coder-bubble user">${escapeText(prompt)}</div>
+      </div>
+      <div class="coder-turn">
+        <div class="coder-work-label">Coding <span>en cours</span></div>
+        <div class="coder-bubble assistant">
+          <span class="coder-pending"><i class="fa-solid fa-circle-notch fa-spin"></i> Libre Claude prépare les modifications...</span>
+        </div>
+      </div>
+    `;
+  }
+  if (topActions) topActions.hidden = true;
+  sendButton.disabled = true;
+  sendButton.innerHTML = '<span>Coding</span><i class="fa-solid fa-circle-notch fa-spin"></i>';
+}
+
 function syncSendState() {
   sendButton.classList.toggle('ready', promptInput.value.trim().length > 0);
 }
 promptInput.addEventListener('input', syncSendState);
+if (coderForm) {
+  coderForm.addEventListener('submit', showCodingStarted);
+}
 syncSendState();
 document.querySelectorAll('[data-review-tab]').forEach(btn => {
   btn.addEventListener('click', () => setReviewTab(btn.dataset.reviewTab || 'diff'));
