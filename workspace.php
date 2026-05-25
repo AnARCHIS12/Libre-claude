@@ -707,7 +707,11 @@ select,.branch-input,input,textarea{background:#0d0d15;color:var(--text);border-
 
   <main class="main">
     <div class="top-actions">
+      <?php if ($aiFilesDraft !== ''): ?>
+      <button class="pill-btn" type="button" onclick="publishGenerated()"><i class="fa-brands fa-github"></i> Publier GitHub</button>
+      <?php else: ?>
       <button class="pill-btn" type="button" onclick="openWorkspaceEnvironment()"><i class="fa-solid fa-sliders"></i> Environnement</button>
+      <?php endif; ?>
     </div>
 
     <div class="coder-shell <?= $aiPrompt ? 'coder-active' : '' ?>">
