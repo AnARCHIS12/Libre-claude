@@ -201,7 +201,7 @@ code,
 
   #msg-input {
     min-height: 48px;
-    max-height: 34dvh;
+    max-height: 26dvh;
     padding: 12px 14px 6px;
     line-height: 1.45;
   }

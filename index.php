@@ -1604,17 +1604,17 @@ const uiText = <?= json_encode([
 const githubReleaseApi = <?= json_encode($githubReleaseApi) ?>;
 
 function syncAppHeight() {
-  const viewport = window.visualViewport;
-  const height = viewport ? viewport.height : window.innerHeight;
-  if (height) document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`);
+  const active = document.activeElement;
+  const isTextField = active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+  if (isMobile && isTextField) return;
+
+  const height = window.innerHeight || document.documentElement.clientHeight;
+  if (height) document.documentElement.style.setProperty('--app-height', `${Math.max(520, Math.round(height))}px`);
 }
 
 syncAppHeight();
 window.addEventListener('resize', syncAppHeight);
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', syncAppHeight);
-  window.visualViewport.addEventListener('scroll', syncAppHeight);
-}
 
 // ============================================================
 // AUTO RESIZE TEXTAREA
@@ -2739,14 +2739,9 @@ function escHtml(s) {
     .replace(/'/g, '&#039;');
 }
 
-function updateAppHeight() {
-  const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-  document.documentElement.style.setProperty('--app-height', `${Math.max(320, height)}px`);
-}
-
 // Init: enable/disable send button
 document.addEventListener('DOMContentLoaded', () => {
-  updateAppHeight();
+  syncAppHeight();
   const inp = document.getElementById('msg-input');
   if (inp) {
     inp.addEventListener('input', () => {
@@ -2754,20 +2749,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     inp.addEventListener('focus', () => {
       setTimeout(() => {
-        updateAppHeight();
         scrollBottom();
       }, 120);
+    });
+    inp.addEventListener('blur', () => {
+      setTimeout(syncAppHeight, 180);
     });
   }
   loadLatestRelease();
 });
 
-window.addEventListener('resize', updateAppHeight);
-window.addEventListener('orientationchange', () => setTimeout(updateAppHeight, 180));
+window.addEventListener('orientationchange', () => setTimeout(syncAppHeight, 180));
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', () => {
-    updateAppHeight();
-    scrollBottom();
+    const active = document.activeElement;
+    const isTextField = active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+    if (!isTextField) syncAppHeight();
   });
 }
 
