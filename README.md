@@ -46,6 +46,10 @@ Le projet utilise PHP pur, SQLite, cURL et des modèles affichés dans l'interfa
 - Pool de clés Claude serveur administrable depuis l'interface.
 - Clés API internes Libre Claude (`lc_sk_...`) pour intégrer vos propres scripts.
 - Dictée vocale avec Voxtral (`voxtral-mini-latest`) depuis le champ de message.
+- Discussion vocale avec réponse audio Mistral ou voix locale du navigateur en fallback.
+- Recherche web Mistral avec rendu des sources dans le chat.
+- Analyse OCR Mistral pour images, PDF, DOCX et PPTX.
+- Génération d'images via les Agents Mistral et l'outil `image_generation`.
 - Interface multilingue : français, anglais, espagnol, allemand et italien.
 - Prévisualisation directe des blocs HTML/CSS/JS/SVG dans un panneau intégré.
 - Workspace utilisateur pour sauvegarder les blocs de code générés.
@@ -57,6 +61,29 @@ Le projet utilise PHP pur, SQLite, cURL et des modèles affichés dans l'interfa
 - Rendu Markdown des réponses.
 - Assets de marque inclus : logo clair, logo sombre et icône.
 - Compatible hébergement mutualisé : pas de `exec`, pas de `shell_exec`, pas de `putenv`.
+
+## Capacités IA
+
+Libre Claude regroupe plusieurs fonctions Mistral dans une seule interface :
+
+| Fonction | Interface | Backend |
+| --- | --- | --- |
+| Chat texte | Champ principal | Chat completions Mistral |
+| Recherche web | Bouton globe | Conversations API + outil `web_search` |
+| Dictée vocale | Bouton micro | Voxtral transcription |
+| Discussion vocale | Bouton téléphone | Transcription + réponse audio |
+| OCR / documents | Bouton fichier | `mistral-ocr-latest` |
+| Génération d'images | Bouton baguette ou demande dans le chat | Agent Mistral + `image_generation` |
+
+Pour générer une image, vous pouvez cliquer sur le bouton baguette ou écrire directement dans le chat :
+
+```text
+génère un chat anarchiste en affiche rouge et noir
+```
+
+Libre Claude détecte les demandes d'image courantes (`génère une image`, `dessine`, `crée une affiche`, etc.) et les route vers l'agent image au lieu du chat texte.
+
+> La génération d'images dépend de l'accès de votre compte Mistral aux Agents et à l'outil `image_generation`. Si votre compte n'y a pas accès, l'interface affichera l'erreur retournée par Mistral.
 
 ## Captures / Branding
 
@@ -249,6 +276,12 @@ PUBLIC_URL=https://votre-domaine.com
 GITHUB_OAUTH_CLIENT_ID=votre_client_id
 GITHUB_OAUTH_CLIENT_SECRET=votre_client_secret
 GITHUB_OAUTH_SCOPE=
+MISTRAL_WEB_SEARCH_TOOL=web_search
+MISTRAL_OCR_MODEL=mistral-ocr-latest
+MISTRAL_IMAGE_MODEL=mistral-medium-latest
+MISTRAL_IMAGE_AGENT_ID=
+MISTRAL_TTS_MODEL=voxtral-mini-tts-2603
+MISTRAL_TTS_VOICE_ID=
 ```
 
 3. Construisez et lancez :
@@ -442,6 +475,19 @@ GITHUB_OAUTH_SCOPE=
 
 `GITHUB_OAUTH_SCOPE` peut rester vide. Libre Claude detecte les GitHub Apps dont le `Client ID` commence par `Iv` et n'envoie pas de scope, car leurs permissions sont gerees dans la GitHub App. Pour une OAuth App classique, utilisez `repo` si vous voulez acceder aux depots prives.
 
+### Variables Mistral optionnelles
+
+| Variable | Défaut | Usage |
+| --- | --- | --- |
+| `MISTRAL_WEB_SEARCH_TOOL` | `web_search` | Outil de recherche web utilisé par Conversations API. |
+| `MISTRAL_OCR_MODEL` | `mistral-ocr-latest` | Modèle OCR pour les images et documents. |
+| `MISTRAL_IMAGE_MODEL` | `mistral-medium-latest` | Modèle de l'agent qui pilote la génération d'image. |
+| `MISTRAL_IMAGE_AGENT_ID` | vide | Agent Mistral existant avec `image_generation`. Si vide, Libre Claude essaie d'en créer un automatiquement. |
+| `MISTRAL_TTS_MODEL` | `voxtral-mini-tts-2603` | Modèle de synthèse vocale. |
+| `MISTRAL_TTS_VOICE_ID` | vide | Voix Mistral à utiliser. Si vide ou indisponible, le navigateur peut lire la réponse en fallback. |
+
+Pour une production stable, créez un Agent Mistral avec l'outil `image_generation`, puis renseignez son identifiant dans `MISTRAL_IMAGE_AGENT_ID`.
+
 Puis relancez :
 
 ```bash
@@ -466,6 +512,9 @@ votre-domaine.com/
 ├── workspace_api.php                 API de sauvegarde des blocs de code
 ├── chat.php                          API de chat
 ├── transcribe.php                    API dictée vocale Voxtral
+├── speak.php                         API réponse vocale
+├── ocr.php                           API OCR et analyse de documents
+├── image_generate.php                API génération d'images
 ├── conversations.php                 API conversations
 ├── auth.php                          Authentification
 ├── i18n.php                          Traductions multilingues
