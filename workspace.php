@@ -173,10 +173,60 @@ function github_save_file($owner, $repo, $branch, $path, $content, $message, $sh
     return github_api_request('PUT', $url, $token, $body, $error);
 }
 
+function github_save_file_resilient($owner, $repo, $branch, $path, $content, $message, $sha, $token, &$error) {
+    $targetBranch = $branch ?: 'main';
+    $saved = github_save_file($owner, $repo, $targetBranch, $path, $content, $message, $sha, $token, $error);
+    if ($saved || (stripos($error, 'HTTP 404') === false && stripos($error, 'HTTP 422') === false)) return $saved;
+
+    $defaultError = '';
+    $defaultBranch = github_default_branch($owner, $repo, $token, $defaultError);
+    if ($defaultBranch !== '' && $defaultBranch !== $targetBranch) {
+        $saved = github_save_file($owner, $repo, $defaultBranch, $path, $content, $message, $sha, $token, $error);
+        if ($saved || (stripos($error, 'HTTP 404') === false && stripos($error, 'HTTP 422') === false)) return $saved;
+    }
+
+    return github_save_file($owner, $repo, '', $path, $content, $message, $sha, $token, $error);
+}
+
 function github_create_initial_file($owner, $repo, $branch, $path, $content, $message, $token, &$error) {
     $initial = github_save_file($owner, $repo, $branch ?: 'main', $path, $content, $message, '', $token, $error);
     if ($initial || (stripos($error, 'HTTP 422') === false && stripos($error, 'HTTP 404') === false)) return $initial;
     return github_save_file($owner, $repo, '', $path, $content, $message, '', $token, $error);
+}
+
+function github_commit_files_via_contents($owner, $repo, $branch, $files, $message, $token, &$error) {
+    $last = null;
+    foreach ($files as $file) {
+        $path = github_clean_path($file['path'] ?? '');
+        if ($path === '' || !array_key_exists('content', $file)) continue;
+
+        $lookupError = '';
+        $existing = github_get_file($owner, $repo, $branch, $path, $token, $lookupError);
+        $sha = $existing['sha'] ?? '';
+        $saveError = '';
+        $saved = github_save_file_resilient(
+            $owner,
+            $repo,
+            $branch,
+            $path,
+            (string)$file['content'],
+            $message ?: 'Update ' . $path . ' from Libre Claude',
+            $sha,
+            $token,
+            $saveError
+        );
+        if (!$saved) {
+            $error = $path . ': ' . ($saveError ?: $lookupError ?: 'publication impossible');
+            return null;
+        }
+        $last = $saved;
+    }
+
+    if (!$last) {
+        $error = 'No files';
+        return null;
+    }
+    return $last;
 }
 
 function github_create_repo($name, $description, $private, $token, &$error) {
@@ -619,6 +669,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $apiError = '';
                     $committed = github_commit_files($github['owner'], $github['repo'], $github['branch'], $filesToCommit, $message, $github['token'], $apiError);
+                    if (!$committed && stripos($apiError, 'HTTP 404') !== false) {
+                        $fallbackError = '';
+                        $committed = github_commit_files_via_contents($github['owner'], $github['repo'], $github['branch'], $filesToCommit, $message, $github['token'], $fallbackError);
+                        if (!$committed) $apiError = $fallbackError ?: $apiError;
+                    }
                     if (!$committed) {
                         $error = github_publish_error_message($apiError, $t);
                     } else {

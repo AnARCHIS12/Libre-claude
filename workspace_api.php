@@ -163,11 +163,12 @@ function workspace_github_get_file($owner, $repo, $branch, $path, $token, &$erro
     $content = base64_decode(str_replace(["\r", "\n"], '', $data['content']));
     return [
         'path' => $data['path'] ?? $path,
+        'sha' => $data['sha'] ?? '',
         'content' => $content === false ? '' : $content,
     ];
 }
 
-function workspace_github_save_file($owner, $repo, $branch, $path, $content, $message, $token, &$error) {
+function workspace_github_save_file($owner, $repo, $branch, $path, $content, $message, $token, &$error, $sha = '') {
     $path = workspace_clean_path($path);
     $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
         . '/contents/' . workspace_github_path($path);
@@ -176,13 +177,68 @@ function workspace_github_save_file($owner, $repo, $branch, $path, $content, $me
         'content' => base64_encode((string)$content),
     ];
     if ($branch !== '') $body['branch'] = $branch ?: 'main';
+    if ($sha !== '') $body['sha'] = $sha;
     return workspace_github_request('PUT', $url, $token, $body, $error);
+}
+
+function workspace_github_save_file_resilient($owner, $repo, $branch, $path, $content, $message, $token, &$error, $sha = '') {
+    $targetBranch = $branch ?: 'main';
+    $saved = workspace_github_save_file($owner, $repo, $targetBranch, $path, $content, $message, $token, $error, $sha);
+    if ($saved || (stripos($error, 'HTTP 404') === false && stripos($error, 'HTTP 422') === false)) return $saved;
+
+    $defaultError = '';
+    $defaultBranch = workspace_github_default_branch($owner, $repo, $token, $defaultError);
+    if ($defaultBranch !== '' && $defaultBranch !== $targetBranch) {
+        $saved = workspace_github_save_file($owner, $repo, $defaultBranch, $path, $content, $message, $token, $error, $sha);
+        if ($saved || (stripos($error, 'HTTP 404') === false && stripos($error, 'HTTP 422') === false)) return $saved;
+    }
+
+    return workspace_github_save_file($owner, $repo, '', $path, $content, $message, $token, $error, $sha);
 }
 
 function workspace_github_create_initial_file($owner, $repo, $branch, $path, $content, $message, $token, &$error) {
     $initial = workspace_github_save_file($owner, $repo, $branch ?: 'main', $path, $content, $message, $token, $error);
     if ($initial || (stripos($error, 'HTTP 422') === false && stripos($error, 'HTTP 404') === false)) return $initial;
     return workspace_github_save_file($owner, $repo, '', $path, $content, $message, $token, $error);
+}
+
+function workspace_commit_files_via_contents($owner, $repo, $branch, $files, $message, $token, &$error) {
+    $last = null;
+    foreach ($files as $file) {
+        $path = workspace_clean_path($file['path'] ?? '');
+        if ($path === '' || !array_key_exists('content', $file)) continue;
+
+        $lookupError = '';
+        $existing = workspace_github_get_file($owner, $repo, $branch, $path, $token, $lookupError);
+        $sha = $existing['sha'] ?? '';
+        $saveError = '';
+        $saved = workspace_github_save_file_resilient(
+            $owner,
+            $repo,
+            $branch,
+            $path,
+            (string)$file['content'],
+            $message ?: 'Update ' . $path . ' from Libre Claude Coder',
+            $token,
+            $saveError,
+            $sha
+        );
+        if (!$saved) {
+            $error = $path . ': ' . ($saveError ?: $lookupError ?: 'publication impossible');
+            return null;
+        }
+        $last = $saved;
+    }
+
+    if (!$last) {
+        $error = 'Aucun fichier à publier';
+        return null;
+    }
+    return [
+        'sha' => $last['commit']['sha'] ?? '',
+        'branch' => $branch ?: 'main',
+        'url' => !empty($last['commit']['html_url']) ? $last['commit']['html_url'] : 'https://github.com/' . $owner . '/' . $repo,
+    ];
 }
 
 function workspace_clean_files($items) {
@@ -414,6 +470,11 @@ if (!$files) {
 
 $commitError = '';
 $commit = workspace_commit_files($owner, $repo, $branch, $files, trim($input['commit_message'] ?? ''), $github['token'], $commitError);
+if (!$commit && stripos($commitError, 'HTTP 404') !== false) {
+    $fallbackError = '';
+    $commit = workspace_commit_files_via_contents($owner, $repo, $branch, $files, trim($input['commit_message'] ?? ''), $github['token'], $fallbackError);
+    if (!$commit) $commitError = $fallbackError ?: $commitError;
+}
 if (!$commit) {
     workspace_api_response(502, ['success' => false, 'error' => workspace_publish_error_message($commitError)]);
 }
