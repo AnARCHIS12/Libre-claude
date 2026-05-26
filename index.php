@@ -2212,7 +2212,7 @@ async function processVoiceConversationBlob(blob) {
       updateVoiceConversationButton('speaking');
       setInputHint(uiText.voice_chat_speaking);
       try {
-        await speakAssistantText(data.content);
+        await speakAssistantText(data.content, blob);
       } catch (speechError) {
         console.warn('Voice playback skipped:', speechError);
       }
@@ -2229,12 +2229,19 @@ async function processVoiceConversationBlob(blob) {
   }
 }
 
-async function speakAssistantText(text) {
+async function speakAssistantText(text, refBlob = null) {
   try {
+    const payload = {
+      text,
+      format: 'mp3',
+    };
+    if (refBlob && refBlob.size > 1200 && refBlob.size < 6 * 1024 * 1024) {
+      payload.ref_audio = await blobToBase64(refBlob);
+    }
     const resp = await fetch('speak.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, format: 'mp3' }),
+      body: JSON.stringify(payload),
     });
     const data = await resp.json();
     if (!data.success) throw new Error(data.error || uiText.voice_chat_error);
@@ -2256,6 +2263,18 @@ async function speakAssistantText(text) {
       return Promise.resolve();
     }
   }
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || '');
+      resolve(value.includes(',') ? value.split(',').pop() : value);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Audio illisible'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 function speakWithBrowserVoice(text) {

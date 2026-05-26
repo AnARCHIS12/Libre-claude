@@ -44,20 +44,32 @@ if ($text === '') {
 
 $text = preg_replace('/```[\s\S]*?```/', ' bloc de code omis. ', $text);
 $text = preg_replace('/`([^`]+)`/', '$1', $text);
-$text = preg_replace('/[#*_>\[\]\(\)]/', ' ', $text);
+$text = preg_replace('/https?:\/\/\S+/i', ' lien omis. ', $text);
+$text = preg_replace('/[#*_>\[\]\(\){}|~^=]/', ' ', $text);
+$text = preg_replace('/[^\p{L}\p{N}\p{P}\p{Zs}\n\r]/u', ' ', $text);
 $text = trim(preg_replace('/\s+/', ' ', strip_tags($text)));
 
-if (mb_strlen($text) > 1800) {
-    $text = mb_substr($text, 0, 1800) . '...';
+if (mb_strlen($text) > 1200) {
+    $text = mb_substr($text, 0, 1200) . '...';
 }
 
 $format = trim($input['format'] ?? 'mp3');
 $voiceId = trim($input['voice_id'] ?? '');
+$refAudio = trim($input['ref_audio'] ?? '');
+if ($refAudio !== '') {
+    $refAudio = preg_replace('/^data:audio\/[^;]+;base64,/i', '', $refAudio);
+    if (!preg_match('/^[A-Za-z0-9+\/=\r\n]+$/', $refAudio)) {
+        $refAudio = '';
+    }
+    if (strlen($refAudio) > 8 * 1024 * 1024) {
+        $refAudio = '';
+    }
+}
 $apiKey = $user['mistral_api_key'] ?: null;
 
 try {
     $claude = getClaudeClient($apiKey);
-    $result = $claude->speech($text, $voiceId, $format);
+    $result = $claude->speech($text, $voiceId, $format, $refAudio);
 
     if ($result['success']) {
         echo json_encode([

@@ -148,7 +148,7 @@ class ClaudeClient {
         return ['success' => false, 'error' => 'Recherche web Mistral impossible. ' . $lastError];
     }
 
-    public function speech($text, $voiceId = null, $format = 'mp3') {
+    public function speech($text, $voiceId = null, $format = 'mp3', $refAudio = null) {
         $cleanText = trim($text);
         if ($cleanText === '') {
             return ['success' => false, 'error' => 'Texte vide'];
@@ -160,7 +160,7 @@ class ClaudeClient {
             $apiKey = $this->apiKeys[$this->currentKeyIndex];
 
             try {
-                $result = $this->doSpeechRequest($apiKey, $cleanText, $voiceId, $format);
+                $result = $this->doSpeechRequest($apiKey, $cleanText, $voiceId, $format, $refAudio);
                 if (!empty($result['audio_data'])) {
                     return [
                         'success'    => true,
@@ -183,8 +183,8 @@ class ClaudeClient {
         }
 
         $hint = 'La réponse vocale Mistral a échoué.';
-        if (trim((string)MISTRAL_TTS_VOICE_ID) === '') {
-            $hint .= ' Configurez MISTRAL_TTS_VOICE_ID ou laissez Libre Claude utiliser la voix locale du navigateur.';
+        if (trim((string)MISTRAL_TTS_VOICE_ID) === '' && trim((string)$refAudio) === '') {
+            $hint .= ' Configurez MISTRAL_TTS_VOICE_ID ou envoyez un ref_audio pour Voxtral TTS.';
         }
         if ($lastError !== '') {
             $hint .= ' Détail : ' . $lastError;
@@ -470,7 +470,7 @@ class ClaudeClient {
         ];
     }
 
-    private function doSpeechRequest($apiKey, $text, $voiceId, $format) {
+    private function doSpeechRequest($apiKey, $text, $voiceId, $format, $refAudio = null) {
         $format = in_array($format, ['mp3', 'wav', 'pcm', 'flac', 'opus'], true) ? $format : 'mp3';
         $payload = [
             'model'           => MISTRAL_TTS_MODEL,
@@ -482,6 +482,11 @@ class ClaudeClient {
         $voiceId = trim((string)($voiceId ?: MISTRAL_TTS_VOICE_ID));
         if ($voiceId !== '') {
             $payload['voice_id'] = $voiceId;
+        } else {
+            $refAudio = trim((string)$refAudio);
+            if ($refAudio !== '') {
+                $payload['ref_audio'] = $refAudio;
+            }
         }
 
         $ch = curl_init(MISTRAL_SPEECH_ENDPOINT);
