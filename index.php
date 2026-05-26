@@ -1827,7 +1827,7 @@ async function handleOcrFile(input) {
   }
 }
 
-async function generateImageFromPrompt() {
+async function generateImageFromPrompt(promptOverride = null) {
   if (!isLoggedIn) {
     setInputHint(uiText.voice_login);
     return;
@@ -1835,7 +1835,7 @@ async function generateImageFromPrompt() {
   if (isBusy) return;
 
   const input = document.getElementById('msg-input');
-  const prompt = input.value.trim();
+  const prompt = (promptOverride === null ? input.value : promptOverride).trim();
   const btn = document.getElementById('image-gen-btn');
   if (!prompt) {
     setInputHint(uiText.image_prompt_required);
@@ -1851,8 +1851,10 @@ async function generateImageFromPrompt() {
   document.getElementById('welcome').style.display = 'none';
   setWelcomeMode(false);
   appendUserMsg(`${uiText.image_generate}: ${prompt}`);
-  input.value = '';
-  input.style.height = 'auto';
+  if (promptOverride === null) {
+    input.value = '';
+    input.style.height = 'auto';
+  }
   const thinkId = appendThinking(uiText.image_generating);
   setInputHint(uiText.image_generating);
   scrollBottom();
@@ -1874,12 +1876,15 @@ async function generateImageFromPrompt() {
     removeThinking(thinkId);
     if (data.success) {
       appendAiMsg(data.content || uiText.generated_images, data.model || model, false, [], data.images || []);
+      return data;
     } else {
       appendAiMsg(data.error || uiText.image_error, model, true);
+      return data;
     }
   } catch (e) {
     removeThinking(thinkId);
     appendAiMsg(uiText.connection_error + e.message, model, true);
+    return { success: false, error: e.message };
   } finally {
     isBusy = false;
     btn && btn.classList.remove('loading');
@@ -1888,6 +1893,24 @@ async function generateImageFromPrompt() {
     setInputHint(uiText.hint);
     scrollBottom();
   }
+}
+
+function normalizeIntentText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’']/g, ' ');
+}
+
+function isImagePrompt(text) {
+  const s = normalizeIntentText(text);
+  const imageWords = '(image|photo|illustration|affiche|poster|visuel|avatar|logo|wallpaper|fond d ecran)';
+  if (new RegExp(`\\b(genere|generer|cree|creer|fais|fait|make|create)\\b[\\s\\S]{0,80}\\b${imageWords}\\b`).test(s)) return true;
+  if (new RegExp(`\\b(dessine|illustre|draw)\\b`).test(s)) return true;
+  if (new RegExp(`\\b(image|photo|illustration|affiche|poster|visuel|avatar|logo)\\s+(de|d |pour)\\b`).test(s)) return true;
+  if (/^\s*(genere|generer|cree|creer|fais|fait|make|create)\s+(un|une|des)\s+chat\b/.test(s)) return true;
+  return false;
 }
 
 async function toggleDictation() {
@@ -2275,6 +2298,9 @@ async function sendMessage(messageOverride = null, options = {}) {
   const model  = document.getElementById('model-select').value;
 
   if (!msg) return;
+  if (!options.forceText && isImagePrompt(msg)) {
+    return generateImageFromPrompt(msg);
+  }
 
   isBusy = true;
   document.getElementById('send-btn').disabled = true;

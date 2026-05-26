@@ -699,6 +699,8 @@ class ClaudeClient {
         $type = $node['type'] ?? '';
         if ($type === 'text' && isset($node['text'])) {
             $content .= "\n" . $node['text'];
+        } elseif ($type === 'tool_file' && ($node['tool'] ?? '') === 'image_generation' && !empty($node['file_id'])) {
+            $files[] = $node['file_id'];
         } elseif (($node['role'] ?? '') === 'assistant' && isset($node['content'])) {
             $unusedSources = [];
             $this->extractConversationContent($node['content'], $content, $unusedSources);
