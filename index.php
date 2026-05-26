@@ -1862,7 +1862,11 @@ async function processVoiceConversationBlob(blob) {
     if (voiceConversationActive && data && data.success && data.content) {
       updateVoiceConversationButton('speaking');
       setInputHint(uiText.voice_chat_speaking);
-      await speakAssistantText(data.content);
+      try {
+        await speakAssistantText(data.content);
+      } catch (speechError) {
+        console.warn('Voice playback skipped:', speechError);
+      }
     }
   } catch (e) {
     console.error('Voice conversation error:', e);
@@ -1896,13 +1900,18 @@ async function speakAssistantText(text) {
   } catch (e) {
     console.warn('Mistral TTS fallback:', e);
     setInputHint(uiText.voice_chat_browser_fallback);
-    return speakWithBrowserVoice(text);
+    try {
+      return await speakWithBrowserVoice(text);
+    } catch (fallbackError) {
+      console.warn('Browser TTS skipped:', fallbackError);
+      return Promise.resolve();
+    }
   }
 }
 
 function speakWithBrowserVoice(text) {
   if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
-    throw new Error(uiText.voice_chat_error);
+    return Promise.resolve();
   }
 
   return new Promise((resolve, reject) => {
@@ -1924,7 +1933,7 @@ function speakWithBrowserVoice(text) {
     utterance.rate = 1;
     utterance.pitch = 1;
     utterance.onend = resolve;
-    utterance.onerror = () => reject(new Error(uiText.voice_chat_error));
+    utterance.onerror = () => resolve();
     window.speechSynthesis.speak(utterance);
     voiceConversationAudio = {
       pause: () => window.speechSynthesis.cancel(),
