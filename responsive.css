@@ -1,0 +1,238 @@
+/* Libre Claude - responsive safety net shared by all pages */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+pre,
+code,
+.secret,
+.code-box,
+.review-code,
+.review-diff,
+.draft,
+.ai-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 900px) {
+  .wrap,
+  .card,
+  .main,
+  .messages-inner,
+  .input-inner,
+  .workspace-panels,
+  .tab-panel,
+  .coder-chat,
+  .coder-code-panel {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .card {
+    border-radius: 14px;
+  }
+
+  .top,
+  .workspace-tabs,
+  .project-links,
+  .input-actions,
+  .quick-btns,
+  .actions,
+  .review-actions,
+  .preview-head-actions {
+    flex-wrap: wrap;
+  }
+
+  .grid,
+  .key-row,
+  .token-row,
+  .info-row,
+  .workspace-panels,
+  .selectors,
+  .generated-review,
+  .file-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .logo,
+  .brand-logo,
+  .welcome-logo,
+  .settings-logo {
+    width: min(260px, 82vw);
+    max-width: 100%;
+  }
+
+  .btn,
+  .btn-ghost,
+  .quick-btn,
+  .code-action,
+  .workspace-tab,
+  .review-tab,
+  .source-card,
+  .nav-link,
+  .side-link {
+    min-height: 40px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .input-actions {
+    align-items: stretch;
+  }
+
+  .quick-btns {
+    width: 100%;
+    order: 2;
+  }
+
+  .input-tools {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .msg-user .bubble,
+  .coder-bubble {
+    max-width: 100%;
+  }
+
+  .source-card {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+
+  .review-pane,
+  .generated-list {
+    min-height: 260px;
+    max-height: none;
+  }
+
+  .review-code,
+  .review-diff,
+  .review-frame {
+    min-height: 300px;
+  }
+
+  .preview-panel {
+    inset: 8px !important;
+    border-radius: 12px;
+  }
+
+  .preview-head {
+    height: auto;
+    min-height: 48px;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .lc-confirm-dialog {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 520px) {
+  .card {
+    padding: 20px !important;
+  }
+
+  h1 {
+    font-size: clamp(24px, 8vw, 30px) !important;
+  }
+
+  .brand {
+    margin-bottom: 22px;
+  }
+
+  .messages-inner {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .input-wrap {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .starters {
+    grid-template-columns: 1fr !important;
+  }
+
+  .starter-card {
+    padding: 12px;
+  }
+
+  .input-tools > button,
+  .send-btn,
+  .voice-btn,
+  .voice-call-btn,
+  .web-search-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .model-menu {
+    max-height: min(360px, 68vh);
+  }
+
+  .workspace-tabs,
+  .review-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    padding-bottom: 4px;
+  }
+
+  .workspace-tab,
+  .review-tab {
+    flex: 0 0 auto;
+  }
+
+  .coder-shell,
+  .coder-shell.coder-active,
+  .coder-shell.environment-open:not(.coder-active) {
+    display: flex !important;
+    min-height: 0;
+    height: auto;
+    padding: 20px 10px 28px !important;
+    flex-direction: column;
+  }
+
+  .coder-shell.coder-active .coder-chat,
+  .coder-code-panel {
+    padding: 18px 10px !important;
+    border-right: 0;
+  }
+
+  .coder-chat h1 {
+    font-size: 25px !important;
+  }
+
+  .composer {
+    border-radius: 16px;
+  }
+}

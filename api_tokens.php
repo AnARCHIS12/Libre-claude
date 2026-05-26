@@ -98,6 +98,7 @@ input:focus{outline:none;border-color:var(--accent)}
 pre{white-space:pre-wrap;background:#050506;border:1px solid var(--border);border-radius:10px;padding:14px;color:#e8e6f0;overflow:auto;font-size:13px}
 @media(max-width:760px){.grid,.token-row{grid-template-columns:1fr}.logo{max-width:100%}.top{align-items:flex-start;flex-direction:column}}
 </style>
+<link rel="stylesheet" href="responsive.css">
 </head>
 <body>
 <div class="wrap">

@@ -915,6 +915,7 @@ select,.branch-input,input,textarea{background:#0d0d15;color:var(--text);border-
 @media(max-width:1100px){.coder-shell{grid-template-columns:1fr;height:auto}.coder-chat{min-height:520px;border-right:0;border-bottom:1px solid #dbdce5}.coder-code-panel .generated-review{height:auto;min-height:520px}}
 @media(max-width:900px){.app{grid-template-columns:1fr}.side{position:static;border-right:0;border-bottom:1px solid var(--line)}.main{padding:0}.coder-shell{height:auto;min-height:0}.coder-chat{padding:28px 14px}.selectors,.workspace-panels,.coder-code-panel .generated-review{grid-template-columns:1fr}.top-actions{position:fixed;right:10px;top:10px}.preview-panel{inset:8px}}
 </style>
+<link rel="stylesheet" href="responsive.css">
 </head>
 <body>
 <div class="app">

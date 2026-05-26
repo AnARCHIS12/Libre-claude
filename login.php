@@ -70,6 +70,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .lang-switch a{color:var(--muted);text-decoration:none;margin:0 5px}
 .lang-switch a.active,.lang-switch a:hover{color:var(--accent2)}
 </style>
+<link rel="stylesheet" href="responsive.css">
 </head>
 <body>
 <div class="card">

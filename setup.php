@@ -101,6 +101,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .lang-switch a.active,.lang-switch a:hover{color:var(--accent2)}
 @media (max-width:640px){.card{padding:34px 24px}.grid{grid-template-columns:1fr}}
 </style>
+<link rel="stylesheet" href="responsive.css">
 </head>
 <body>
 <div class="card">

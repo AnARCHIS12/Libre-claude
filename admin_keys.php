@@ -181,6 +181,7 @@ input:focus{outline:none;border-color:var(--accent)}
 .actions form{display:inline}
 @media(max-width:760px){.grid,.key-row{grid-template-columns:1fr}.actions{justify-content:flex-start}.logo{max-width:100%}.top{align-items:flex-start;flex-direction:column}}
 </style>
+<link rel="stylesheet" href="responsive.css">
 </head>
 <body>
 <div class="wrap">

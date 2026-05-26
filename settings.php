@@ -128,6 +128,7 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:28px;margin-bottom:32px
 .memory-meta{font-size:11.5px;color:var(--muted)}
 .memory-empty{font-size:13px;color:var(--muted);line-height:1.5}
 </style>
+<link rel="stylesheet" href="responsive.css">
 </head>
 <body>
 <div class="wrap">
