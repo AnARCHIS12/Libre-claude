@@ -399,6 +399,19 @@ body {
   padding: 30px 24px 26px;
 }
 
+.main.welcome-mode .messages-wrap {
+  overflow-y: hidden;
+}
+
+.main.welcome-mode .messages-inner {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
 /* Welcome screen */
 .welcome {
   display: flex;
@@ -409,6 +422,16 @@ body {
   text-align: center;
   padding: 24px 20px 14px;
   animation: fadeUp .5s ease;
+}
+
+.main.welcome-mode .welcome {
+  width: 100%;
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+
+.main.welcome-mode .welcome-logo {
+  width: min(210px, 56vw);
 }
 
 .welcome-logo {
@@ -1193,6 +1216,13 @@ body {
   .starter-title { margin-bottom: 2px; }
   .starter-desc { line-height: 1.35; }
 }
+
+@media (max-height: 840px) {
+  .main.welcome-mode .welcome-manifesto { display: none; }
+  .main.welcome-mode .welcome-logo { width: min(180px, 52vw); margin-bottom: 8px; }
+  .main.welcome-mode .project-links { margin-bottom: 10px; }
+  .main.welcome-mode .starter-card { padding: 12px; }
+}
 </style>
 <link rel="stylesheet" href="responsive.css">
 </head>
@@ -1316,7 +1346,7 @@ body {
 </aside>
 
 <!-- ===== MAIN ===== -->
-<main class="main">
+<main class="main welcome-mode">
 
   <!-- Messages -->
   <div class="messages-wrap" id="messages-wrap">
@@ -1569,6 +1599,11 @@ function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
 }
 
+function setWelcomeMode(enabled) {
+  const main = document.querySelector('.main');
+  if (main) main.classList.toggle('welcome-mode', !!enabled);
+}
+
 document.addEventListener('click', e => {
   const sb = document.getElementById('sidebar');
   const toggle = document.getElementById('sidebar-toggle');
@@ -1608,6 +1643,7 @@ function newChat() {
   currentConvId = null;
   document.getElementById('messages-list').innerHTML = '';
   document.getElementById('welcome').style.display = 'flex';
+  setWelcomeMode(true);
   document.getElementById('msg-input').value = '';
   document.getElementById('send-btn').disabled = true;
   document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
@@ -1622,6 +1658,7 @@ async function loadConversation(id) {
 
   currentConvId = id;
   document.getElementById('welcome').style.display = 'none';
+  setWelcomeMode(false);
   document.getElementById('messages-list').innerHTML = '';
 
   document.querySelectorAll('.conv-item').forEach(el => {
@@ -1748,6 +1785,7 @@ async function handleOcrFile(input) {
   document.getElementById('send-btn').disabled = true;
   promptInput.disabled = true;
   document.getElementById('welcome').style.display = 'none';
+  setWelcomeMode(false);
   appendUserMsg(`${uiText.ocr_analyze}: ${file.name}\n\n${prompt}`);
   promptInput.value = '';
   promptInput.style.height = 'auto';
@@ -1811,6 +1849,7 @@ async function generateImageFromPrompt() {
   document.getElementById('send-btn').disabled = true;
   input.disabled = true;
   document.getElementById('welcome').style.display = 'none';
+  setWelcomeMode(false);
   appendUserMsg(`${uiText.image_generate}: ${prompt}`);
   input.value = '';
   input.style.height = 'auto';
@@ -2243,6 +2282,7 @@ async function sendMessage(messageOverride = null, options = {}) {
 
   // Hide welcome
   document.getElementById('welcome').style.display = 'none';
+  setWelcomeMode(false);
 
   // Append user message
   appendUserMsg(msg);
