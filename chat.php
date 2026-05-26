@@ -124,10 +124,12 @@ try {
     if ($memoryContext !== '') {
         $systemPrompt .= "\n\n" . $memoryContext;
     }
-    $apiMessages[] = [
-        'role'    => 'system',
-        'content' => $systemPrompt,
-    ];
+    if (!$useWebSearch) {
+        $apiMessages[] = [
+            'role'    => 'system',
+            'content' => $systemPrompt,
+        ];
+    }
 
     // Historique de la conversation (max 20 derniers messages)
     if ($convId && $useHistory) {
@@ -140,6 +142,9 @@ try {
         );
         foreach (array_reverse($history) as $msg) {
             if (in_array($msg['role'], ['user', 'assistant'])) {
+                if ($useWebSearch && $msg['role'] === 'user' && trim($msg['content']) === $message) {
+                    continue;
+                }
                 $apiMessages[] = [
                     'role'    => $msg['role'],
                     'content' => $msg['content'],
@@ -153,7 +158,21 @@ try {
 
     // Appel Mistral
     if ($useWebSearch) {
-        $result = $claude->chatWithWebSearch($apiMessages, $model, [
+        $webInputs = [[
+            'role' => 'user',
+            'content' => $systemPrompt,
+        ]];
+        foreach ($apiMessages as $entry) {
+            if (($entry['role'] ?? '') === 'user' || ($entry['role'] ?? '') === 'assistant') {
+                $webInputs[] = $entry;
+            }
+        }
+        $webInputs[] = [
+            'role' => 'user',
+            'content' => $message,
+        ];
+
+        $result = $claude->chatWithWebSearch($webInputs, $model, [
             'temperature' => 0.3,
             'web_search_tool' => MISTRAL_WEB_SEARCH_TOOL,
         ]);
