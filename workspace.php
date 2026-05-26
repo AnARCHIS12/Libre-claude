@@ -1298,6 +1298,11 @@ function previewMime(path) {
 }
 
 function previewAssetContent(files, currentPath, ref) {
+  const file = previewAssetFile(files, currentPath, ref);
+  return file ? String(file.content || '') : null;
+}
+
+function previewAssetFile(files, currentPath, ref) {
   ref = String(ref || '').trim();
   if (!ref || /^(?:[a-z][a-z0-9+.-]*:|#)/i.test(ref)) return null;
   const cleanRef = ref.split('#')[0].split('?')[0];
@@ -1310,7 +1315,118 @@ function previewAssetContent(files, currentPath, ref) {
     candidates.push(previewNormalizePath('public/' + cleanRef.replace(/^\/+/, '')));
   }
   const match = (files || []).find(file => candidates.includes(previewNormalizePath(file.path)));
-  return match ? String(match.content || '') : null;
+  return match || null;
+}
+
+function previewErrorOverlayScript() {
+  return `<script>
+(() => {
+  const show = message => {
+    let box = document.getElementById('__libre_preview_error');
+    if (!box) {
+      box = document.createElement('pre');
+      box.id = '__libre_preview_error';
+      box.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:999999;margin:0;padding:12px 14px;border-radius:10px;background:#1a1115;color:#ffdce2;border:1px solid #e6122a;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;max-height:45vh;overflow:auto';
+      document.body.appendChild(box);
+    }
+    box.textContent = 'Erreur aperçu Libre Claude:\\n' + String(message || 'Erreur inconnue');
+  };
+  window.addEventListener('error', event => show(event.message || event.error));
+  window.addEventListener('unhandledrejection', event => show(event.reason && (event.reason.stack || event.reason.message) || event.reason));
+  setTimeout(() => {
+    if (!document.body || document.body.children.length > 1 || document.body.textContent.trim()) return;
+    show('La page est vide. Vérifiez que index.html cible le bon fichier JS/CSS, par exemple /src/app.js ou ./src/app.js.');
+  }, 900);
+})();
+<\/script>`;
+}
+
+function previewModuleBootstrap(entryPath, files) {
+  const sourceFiles = {};
+  (files || []).forEach(file => {
+    const path = previewNormalizePath(file.path);
+    if (!path) return;
+    sourceFiles[path] = String(file.content || '');
+  });
+  return `<script type="module">
+const __lcFiles = ${JSON.stringify(sourceFiles)};
+const __lcEntry = ${JSON.stringify(previewNormalizePath(entryPath))};
+const __lcCache = {};
+function __lcNormalize(path) {
+  const parts = [];
+  String(path || '').replace(/^\\/+/, '').split('/').forEach(part => {
+    if (!part || part === '.') return;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  });
+  return parts.join('/');
+}
+function __lcDir(path) {
+  path = __lcNormalize(path);
+  const i = path.lastIndexOf('/');
+  return i === -1 ? '' : path.slice(0, i + 1);
+}
+function __lcExt(path) {
+  return String(path || '').split('.').pop().toLowerCase();
+}
+function __lcResolve(from, spec) {
+  if (spec === 'react') return 'https://esm.sh/react@18';
+  if (spec === 'react-dom/client') return 'https://esm.sh/react-dom@18/client';
+  if (spec === 'react-dom') return 'https://esm.sh/react-dom@18';
+  if (/^(?:https?:|data:|blob:)/.test(spec)) return spec;
+  const base = spec.startsWith('/') ? spec : __lcDir(from) + spec;
+  const clean = __lcNormalize(base);
+  const tries = [clean, clean + '.js', clean + '.jsx', clean + '.ts', clean + '.tsx', clean + '/index.js', clean + '/index.jsx'];
+  return tries.find(path => Object.prototype.hasOwnProperty.call(__lcFiles, path)) || clean;
+}
+function __lcHasJsx(path, code) {
+  const ext = __lcExt(path);
+  return ext === 'jsx' || ext === 'tsx' || /<[A-Za-z][A-Za-z0-9]*[\\s>/]/.test(code);
+}
+function __lcNeedsBabel(path, code) {
+  const ext = __lcExt(path);
+  return ext === 'jsx' || ext === 'tsx' || ext === 'ts' || __lcHasJsx(path, code);
+}
+async function __lcLoadBabel() {
+  if (window.Babel) return;
+  await new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/@babel/standalone/babel.min.js';
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('Impossible de charger Babel pour l aperçu JSX.'));
+    document.head.appendChild(script);
+  });
+}
+async function __lcBuild(path) {
+  path = __lcNormalize(path);
+  if (__lcCache[path]) return __lcCache[path];
+  let code = __lcFiles[path];
+  if (code == null) throw new Error('Module introuvable: ' + path);
+  if (__lcNeedsBabel(path, code)) {
+    await __lcLoadBabel();
+    code = Babel.transform(code, {presets: ['react', 'typescript'], filename: path, sourceType: 'module'}).code;
+  }
+  const replacements = [];
+  const importRegex = /import\\s+(?:[^'"]*?\\s+from\\s+)?['"]([^'"]+)['"]/g;
+  let match;
+  while ((match = importRegex.exec(code))) {
+    const spec = match[1];
+    const resolved = __lcResolve(path, spec);
+    if (/\\.css$/i.test(resolved) && __lcFiles[resolved] != null) {
+      replacements.push([match[0], 'const __s=document.createElement("style");__s.textContent=' + JSON.stringify(__lcFiles[resolved]) + ';document.head.appendChild(__s)']);
+    } else if (__lcFiles[resolved] != null) {
+      replacements.push([spec, await __lcBuild(resolved)]);
+    } else if (/^(?:https?:|data:|blob:)/.test(resolved)) {
+      replacements.push([spec, resolved]);
+    }
+  }
+  replacements.forEach(([from, to]) => { code = code.split(from).join(to); });
+  const url = URL.createObjectURL(new Blob([code], {type: 'text/javascript'}));
+  __lcCache[path] = url;
+  return url;
+}
+await import(await __lcBuild(__lcEntry));
+<\/script>`;
 }
 
 function buildHtmlProjectPreview(code, currentPath, files) {
@@ -1323,9 +1439,20 @@ function buildHtmlProjectPreview(code, currentPath, files) {
     style.textContent = css;
     link.replaceWith(style);
   });
+  let moduleEntry = null;
   doc.querySelectorAll('script[src]').forEach(script => {
-    const js = previewAssetContent(files, currentPath, script.getAttribute('src'));
-    if (js === null) return;
+    const asset = previewAssetFile(files, currentPath, script.getAttribute('src'));
+    if (!asset) return;
+    const js = String(asset.content || '');
+    const assetPath = previewNormalizePath(asset.path);
+    const isModule = (script.getAttribute('type') || '').toLowerCase() === 'module'
+      || /\.(jsx|tsx|ts)$/i.test(assetPath)
+      || /\bimport\s+|\bexport\s+|<[A-Za-z][A-Za-z0-9]*[\s>/]/.test(js);
+    if (isModule) {
+      moduleEntry = assetPath;
+      script.remove();
+      return;
+    }
     const inline = doc.createElement('script');
     inline.textContent = js;
     script.replaceWith(inline);
@@ -1336,6 +1463,10 @@ function buildHtmlProjectPreview(code, currentPath, files) {
     const path = img.getAttribute('src').split('#')[0].split('?')[0];
     img.setAttribute('src', 'data:' + previewMime(path) + ';base64,' + btoa(unescape(encodeURIComponent(content))));
   });
+  doc.body.insertAdjacentHTML('beforeend', previewErrorOverlayScript());
+  if (moduleEntry) {
+    doc.body.insertAdjacentHTML('beforeend', previewModuleBootstrap(moduleEntry, files));
+  }
   return '<!doctype html>\n' + doc.documentElement.outerHTML;
 }
 
