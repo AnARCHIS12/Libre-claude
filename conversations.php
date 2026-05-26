@@ -31,7 +31,7 @@ if ($action === 'list') {
          FROM conversations 
          WHERE user_id = ? AND is_archived = 0 
          ORDER BY updated_at DESC 
-         LIMIT 50",
+         LIMIT 200",
         [$user['id']]
     );
     echo json_encode(['success' => true, 'conversations' => $convs]);

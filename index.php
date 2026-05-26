@@ -31,7 +31,7 @@ if ($user) {
     $recentConvs = $db->fetchAll(
         "SELECT id, title, model_used, updated_at FROM conversations 
          WHERE user_id = ? AND is_archived = 0 
-         ORDER BY updated_at DESC LIMIT 30",
+         ORDER BY updated_at DESC LIMIT 200",
         [$user['id']]
     );
     $workspaceGithub = $db->fetch("SELECT owner, repo, branch, token, updated_at FROM workspace_github WHERE user_id = ?", [$user['id']]);
@@ -1567,6 +1567,8 @@ const uiLanguage = <?= json_encode($lang) ?>;
 const uiText = <?= json_encode([
     'hint' => $t('hint'),
     'recent' => $t('recent'),
+    'conversation' => $t('conversation'),
+    'no_conversation' => $t('no_conversation'),
     'voice_login' => $t('voice_login'),
     'voice_start' => $t('voice_start'),
     'voice_transcribing' => $t('voice_transcribing'),
@@ -2548,6 +2550,58 @@ function scrollBottom() {
 }
 
 function addConvToSidebar(id, title) {
+  refreshConversationList(id).catch(() => addConvToSidebarFallback(id, title));
+}
+
+async function refreshConversationList(activeId = null) {
+  if (!isLoggedIn) return;
+  const list = document.getElementById('conv-list');
+  if (!list) return;
+
+  const resp = await fetch('conversations.php?action=list');
+  const data = await resp.json();
+  if (!data.success || !Array.isArray(data.conversations)) {
+    throw new Error(data.error || 'Liste conversations impossible');
+  }
+
+  Array.from(list.children).forEach(child => {
+    if (!child.classList.contains('workspace-menu')) child.remove();
+  });
+
+  if (!data.conversations.length) {
+    const empty = document.createElement('div');
+    empty.dataset.empty = '1';
+    empty.style.cssText = 'padding:16px 8px;font-size:13px;color:var(--muted);text-align:center';
+    empty.textContent = uiText.no_conversation || '';
+    list.appendChild(empty);
+    return;
+  }
+
+  const label = document.createElement('div');
+  label.className = 'conv-section-label';
+  label.textContent = uiText.recent;
+  list.appendChild(label);
+
+  data.conversations.forEach(conv => {
+    list.appendChild(createConversationItem(conv.id, conv.title || uiText.conversation || 'Conversation', activeId && Number(activeId) === Number(conv.id)));
+  });
+}
+
+function createConversationItem(id, title, active = false) {
+  const shortTitle = title.length > 40 ? title.slice(0, 40) + '…' : title;
+  const div = document.createElement('div');
+  div.id = `conv-${id}`;
+  div.dataset.id = id;
+  div.className = `conv-item${active ? ' active' : ''}`;
+  div.innerHTML = `
+    <span class="conv-title">${escHtml(shortTitle)}</span>
+    <button class="conv-del" title="${escHtml(uiText.delete)}" onclick="event.stopPropagation(); deleteConversation(${id})">×</button>
+  `;
+  div.onclick = () => loadConversation(id);
+  return div;
+}
+
+function addConvToSidebarFallback(id, title) {
   if (!isLoggedIn) return;
   const list = document.getElementById('conv-list');
   if (!list) return;
@@ -2570,16 +2624,7 @@ function addConvToSidebar(id, title) {
   // Check not already there
   if (document.getElementById(`conv-${id}`)) return;
 
-  const shortTitle = title.length > 40 ? title.slice(0, 40) + '…' : title;
-  const div = document.createElement('div');
-  div.id        = `conv-${id}`;
-  div.dataset.id = id;
-  div.className  = 'conv-item active';
-  div.innerHTML  = `
-    <span class="conv-title">${escHtml(shortTitle)}</span>
-    <button class="conv-del" title="${escHtml(uiText.delete)}" onclick="event.stopPropagation(); deleteConversation(${id})">×</button>
-  `;
-  div.onclick = () => loadConversation(id);
+  const div = createConversationItem(id, title, true);
 
   // Remove active from others
   document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
