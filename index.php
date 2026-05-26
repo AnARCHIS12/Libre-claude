@@ -745,6 +745,17 @@ body {
   align-items: center;
   padding: 6px 0;
 }
+.thinking-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  color: var(--muted2);
+  font-size: 13px;
+  font-weight: 650;
+}
+.thinking-wrap .thinking { padding: 0; }
+.thinking-label { color: var(--text); }
 .thinking span {
   width: 7px; height: 7px;
   background: var(--accent);
@@ -1740,7 +1751,7 @@ async function handleOcrFile(input) {
   appendUserMsg(`${uiText.ocr_analyze}: ${file.name}\n\n${prompt}`);
   promptInput.value = '';
   promptInput.style.height = 'auto';
-  const thinkId = appendThinking();
+  const thinkId = appendThinking(uiText.ocr_uploading);
   setInputHint(uiText.ocr_uploading);
   scrollBottom();
 
@@ -1803,7 +1814,7 @@ async function generateImageFromPrompt() {
   appendUserMsg(`${uiText.image_generate}: ${prompt}`);
   input.value = '';
   input.style.height = 'auto';
-  const thinkId = appendThinking();
+  const thinkId = appendThinking(uiText.image_generating);
   setInputHint(uiText.image_generating);
   scrollBottom();
 
@@ -2371,7 +2382,7 @@ function safeHost(url) {
   }
 }
 
-function appendThinking() {
+function appendThinking(label = '') {
   const list = document.getElementById('messages-list');
   const id   = 'think-' + Date.now();
   const div  = document.createElement('div');
@@ -2380,8 +2391,11 @@ function appendThinking() {
   div.innerHTML = `
     <img class="ai-avatar" src="libre-claude-icon.png" alt="">
     <div class="ai-body">
-      <div class="thinking">
-        <span></span><span></span><span></span>
+      <div class="thinking-wrap">
+        <div class="thinking">
+          <span></span><span></span><span></span>
+        </div>
+        ${label ? `<span class="thinking-label">${escHtml(label)}</span>` : ''}
       </div>
     </div>
   `;

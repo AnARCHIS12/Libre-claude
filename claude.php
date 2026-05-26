@@ -576,10 +576,8 @@ class ClaudeClient {
     private function doImageConversationRequest($apiKey, $agentId, $prompt) {
         $payload = [
             'agent_id' => $agentId,
-            'inputs' => [[
-                'role' => 'user',
-                'content' => $prompt,
-            ]],
+            'inputs' => $prompt,
+            'store' => false,
         ];
 
         return $this->postJson($apiKey, MISTRAL_CONVERSATIONS_ENDPOINT, $payload, 180);
