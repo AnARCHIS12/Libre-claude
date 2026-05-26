@@ -115,6 +115,50 @@ class ClaudeClient {
         return ['success' => false, 'error' => 'La dictée vocale a échoué. Vérifiez vos clés Claude.'];
     }
 
+    public function speech($text, $voiceId = null, $format = 'mp3') {
+        $cleanText = trim($text);
+        if ($cleanText === '') {
+            return ['success' => false, 'error' => 'Texte vide'];
+        }
+
+        $maxTries = count($this->apiKeys) * 2;
+        $lastError = '';
+        for ($i = 0; $i < $maxTries; $i++) {
+            $apiKey = $this->apiKeys[$this->currentKeyIndex];
+
+            try {
+                $result = $this->doSpeechRequest($apiKey, $cleanText, $voiceId, $format);
+                if (!empty($result['audio_data'])) {
+                    return [
+                        'success'    => true,
+                        'audio_data' => $result['audio_data'],
+                        'format'     => $result['format'] ?? $format,
+                        'mime'       => $this->audioMimeType($result['format'] ?? $format),
+                        'model'      => $result['model'] ?? MISTRAL_TTS_MODEL,
+                    ];
+                }
+                throw new Exception('Synthèse vocale invalide');
+            } catch (Exception $e) {
+                $msg = $e->getMessage();
+                $lastError = $msg;
+                libreclaude_log("Speech key[$this->currentKeyIndex] error: $msg", 2);
+
+                if (strpos($msg, '429') !== false || strpos($msg, '401') !== false) {
+                    $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
+                }
+            }
+        }
+
+        $hint = 'La réponse vocale Mistral a échoué.';
+        if (trim((string)MISTRAL_TTS_VOICE_ID) === '') {
+            $hint .= ' Configurez MISTRAL_TTS_VOICE_ID ou laissez Libre Claude utiliser la voix locale du navigateur.';
+        }
+        if ($lastError !== '') {
+            $hint .= ' Détail : ' . $lastError;
+        }
+        return ['success' => false, 'error' => $hint];
+    }
+
     private function doRequest($apiKey, $params) {
         $ch = curl_init(MISTRAL_API_ENDPOINT);
 
@@ -187,6 +231,75 @@ class ClaudeClient {
         $decoded = json_decode($response, true);
         if (!$decoded) throw new Exception('JSON invalide');
         return $decoded;
+    }
+
+    private function doSpeechRequest($apiKey, $text, $voiceId, $format) {
+        $format = in_array($format, ['mp3', 'wav', 'pcm', 'flac', 'opus'], true) ? $format : 'mp3';
+        $payload = [
+            'model'           => MISTRAL_TTS_MODEL,
+            'input'           => $text,
+            'response_format' => $format,
+            'stream'          => false,
+        ];
+
+        $voiceId = trim((string)($voiceId ?: MISTRAL_TTS_VOICE_ID));
+        if ($voiceId !== '') {
+            $payload['voice_id'] = $voiceId;
+        }
+
+        $ch = curl_init(MISTRAL_SPEECH_ENDPOINT);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode($payload),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 90,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_USERAGENT      => 'Libre Claude/1.0 (PHP cURL)',
+            CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) throw new Exception("cURL: $error");
+        if ($httpCode < 200 || $httpCode >= 300) {
+            $decoded = json_decode($response, true);
+            $errMsg  = $decoded['message'] ?? $decoded['error']['message'] ?? "HTTP $httpCode";
+            throw new Exception($errMsg);
+        }
+
+        $decoded = json_decode($response, true);
+        if (is_array($decoded) && !empty($decoded['audio_data'])) {
+            $decoded['format'] = $format;
+            return $decoded;
+        }
+
+        if ($response !== '') {
+            return [
+                'audio_data' => base64_encode($response),
+                'format'     => $format,
+                'model'      => MISTRAL_TTS_MODEL,
+            ];
+        }
+
+        throw new Exception('JSON invalide');
+    }
+
+    private function audioMimeType($format) {
+        $map = [
+            'mp3'  => 'audio/mpeg',
+            'wav'  => 'audio/wav',
+            'pcm'  => 'audio/pcm',
+            'flac' => 'audio/flac',
+            'opus' => 'audio/ogg; codecs=opus',
+        ];
+        return $map[$format] ?? 'audio/mpeg';
     }
 
     public function getModels() {

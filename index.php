@@ -969,7 +969,8 @@ body {
   gap: 8px;
   flex-shrink: 0;
 }
-.voice-btn {
+.voice-btn,
+.voice-call-btn {
   width: 38px;
   height: 38px;
   border: 1px solid var(--border);
@@ -987,6 +988,11 @@ body {
   color: var(--accent2);
   transform: scale(1.05);
 }
+.voice-call-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent2);
+  transform: scale(1.05);
+}
 .voice-btn.recording {
   background: rgba(230,18,42,.18);
   border-color: var(--accent);
@@ -995,6 +1001,17 @@ body {
 .voice-btn.transcribing {
   pointer-events: none;
   opacity: .75;
+}
+.voice-call-btn.active,
+.voice-call-btn.listening,
+.voice-call-btn.speaking {
+  background: rgba(230,18,42,.18);
+  border-color: var(--accent);
+  color: var(--accent2);
+}
+.voice-call-btn.thinking {
+  background: rgba(255,255,255,.08);
+  color: var(--warn);
 }
 
 .input-hint {
@@ -1293,6 +1310,9 @@ body {
             <button class="quick-btn" onclick="setPrompt(<?= $jsText('quick_plan_prompt') ?>)"><i class="fa-solid fa-list-check"></i><?= htmlspecialchars($t('plan')) ?></button>
           </div>
           <div class="input-tools">
+            <button class="voice-call-btn" id="voice-call-btn" onclick="toggleVoiceConversation()" type="button" title="<?= htmlspecialchars($t('voice_chat_title')) ?>" aria-label="<?= htmlspecialchars($t('voice_chat_title')) ?>">
+              <i class="fa-solid fa-phone"></i>
+            </button>
             <button class="voice-btn" id="voice-btn" onclick="toggleDictation()" type="button" title="<?= htmlspecialchars($t('voice_title')) ?>" aria-label="<?= htmlspecialchars($t('voice_title')) ?>">
               <i class="fa-solid fa-microphone"></i>
             </button>
@@ -1331,6 +1351,14 @@ let mediaRecorder = null;
 let voiceChunks = [];
 let isRecording = false;
 let isTranscribing = false;
+let voiceConversationActive = false;
+let voiceConversationRecorder = null;
+let voiceConversationChunks = [];
+let voiceConversationStream = null;
+let voiceConversationAudio = null;
+let voiceConversationMonitor = null;
+let voiceConversationState = 'idle';
+let voiceConversationManualStop = false;
 const modelNames = <?= json_encode(array_reduce(MISTRAL_MODELS, function($carry, $models) {
     foreach ($models as $model) {
         $carry[$model['id']] = $model['name'];
@@ -1352,6 +1380,16 @@ const uiText = <?= json_encode([
     'voice_browser_error' => $t('voice_browser_error'),
     'voice_micro_error' => $t('voice_micro_error'),
     'transcription_failed' => $t('transcription_failed'),
+    'voice_chat_title' => $t('voice_chat_title'),
+    'voice_chat_start' => $t('voice_chat_start'),
+    'voice_chat_listening' => $t('voice_chat_listening'),
+    'voice_chat_thinking' => $t('voice_chat_thinking'),
+    'voice_chat_speaking' => $t('voice_chat_speaking'),
+    'voice_chat_stop' => $t('voice_chat_stop'),
+    'voice_chat_send' => $t('voice_chat_send'),
+    'voice_chat_error' => $t('voice_chat_error'),
+    'voice_chat_empty' => $t('voice_chat_empty'),
+    'voice_chat_browser_fallback' => $t('voice_chat_browser_fallback'),
     'unknown_error' => $t('unknown_error'),
     'connection_error' => $t('connection_error'),
     'code_copy' => $t('code_copy'),
@@ -1527,6 +1565,10 @@ function setInputHint(text) {
 
 async function toggleDictation() {
   if (isTranscribing) return;
+  if (voiceConversationActive) {
+    stopVoiceConversation();
+    return;
+  }
   if (!isLoggedIn) {
     alert(uiText.voice_login);
     return;
@@ -1598,18 +1640,8 @@ async function transcribeAudio(blob) {
   setInputHint(uiText.voice_transcribing);
 
   try {
-    const form = new FormData();
-    form.append('audio', blob, 'dictee.webm');
-    form.append('language', uiLanguage);
-
-    const resp = await fetch('transcribe.php', {
-      method: 'POST',
-      body: form,
-    });
-    const data = await resp.json();
-
-    if (!data.success) throw new Error(data.error || 'Transcription impossible');
-    insertDictation(data.text || '');
+    const text = await requestTranscription(blob);
+    insertDictation(text || '');
     setInputHint(uiText.voice_done);
   } catch (e) {
     console.error('Transcription error:', e);
@@ -1619,6 +1651,20 @@ async function transcribeAudio(blob) {
     isTranscribing = false;
     updateVoiceButton('idle');
   }
+}
+
+async function requestTranscription(blob) {
+  const form = new FormData();
+  form.append('audio', blob, 'dictee.webm');
+  form.append('language', uiLanguage);
+
+  const resp = await fetch('transcribe.php', {
+    method: 'POST',
+    body: form,
+  });
+  const data = await resp.json();
+  if (!data.success) throw new Error(data.error || 'Transcription impossible');
+  return (data.text || '').trim();
 }
 
 function insertDictation(text) {
@@ -1633,26 +1679,280 @@ function insertDictation(text) {
   document.getElementById('send-btn').disabled = input.value.trim() === '';
 }
 
-async function sendMessage() {
+async function toggleVoiceConversation() {
+  if (voiceConversationActive) {
+    if (voiceConversationState === 'listening' && voiceConversationRecorder && voiceConversationRecorder.state === 'recording') {
+      voiceConversationManualStop = true;
+      updateVoiceConversationButton('thinking');
+      setInputHint(uiText.voice_chat_thinking);
+      try { voiceConversationRecorder.stop(); } catch (e) {}
+      return;
+    }
+    stopVoiceConversation();
+    return;
+  }
+
+  if (!isLoggedIn) {
+    alert(uiText.voice_login);
+    return;
+  }
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    alert(uiText.voice_browser_error);
+    return;
+  }
+
+  voiceConversationActive = true;
+  updateVoiceConversationButton('listening');
+  setInputHint(uiText.voice_chat_start);
+  await startVoiceConversationTurn();
+}
+
+function stopVoiceConversation() {
+  voiceConversationActive = false;
+  if (voiceConversationMonitor) {
+    cancelAnimationFrame(voiceConversationMonitor);
+    voiceConversationMonitor = null;
+  }
+  if (voiceConversationRecorder && voiceConversationRecorder.state !== 'inactive') {
+    try { voiceConversationRecorder.stop(); } catch (e) {}
+  }
+  if (voiceConversationStream) {
+    voiceConversationStream.getTracks().forEach(track => track.stop());
+    voiceConversationStream = null;
+  }
+  if (voiceConversationAudio) {
+    voiceConversationAudio.pause();
+    voiceConversationAudio = null;
+  }
+  updateVoiceConversationButton('idle');
+  setInputHint(uiText.hint);
+}
+
+function updateVoiceConversationButton(state = 'idle') {
+  const btn = document.getElementById('voice-call-btn');
+  if (!btn) return;
+
+  voiceConversationState = state;
+  btn.classList.toggle('active', state !== 'idle');
+  btn.classList.toggle('listening', state === 'listening');
+  btn.classList.toggle('thinking', state === 'thinking');
+  btn.classList.toggle('speaking', state === 'speaking');
+
+  if (state === 'listening') {
+    btn.innerHTML = '<i class="fa-solid fa-ear-listen"></i>';
+    btn.title = uiText.voice_chat_send;
+  } else if (state === 'thinking') {
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+    btn.title = uiText.voice_chat_thinking;
+  } else if (state === 'speaking') {
+    btn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+    btn.title = uiText.voice_chat_stop;
+  } else {
+    voiceConversationState = 'idle';
+    btn.innerHTML = '<i class="fa-solid fa-phone"></i>';
+    btn.title = uiText.voice_chat_title;
+  }
+}
+
+async function startVoiceConversationTurn() {
+  if (!voiceConversationActive || isBusy) return;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!voiceConversationActive) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
+
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : 'audio/webm';
+    voiceConversationStream = stream;
+    voiceConversationChunks = [];
+    voiceConversationManualStop = false;
+    voiceConversationRecorder = new MediaRecorder(stream, { mimeType });
+
+    let speechSeen = false;
+    let silenceSince = null;
+    const startedAt = Date.now();
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 1024;
+    const buffer = new Uint8Array(analyser.fftSize);
+    source.connect(analyser);
+
+    voiceConversationRecorder.ondataavailable = event => {
+      if (event.data && event.data.size > 0) voiceConversationChunks.push(event.data);
+    };
+
+    voiceConversationRecorder.onstop = async () => {
+      if (voiceConversationMonitor) {
+        cancelAnimationFrame(voiceConversationMonitor);
+        voiceConversationMonitor = null;
+      }
+      stream.getTracks().forEach(track => track.stop());
+      voiceConversationStream = null;
+      try { await audioContext.close(); } catch (e) {}
+
+      if (!voiceConversationActive) return;
+      const blob = new Blob(voiceConversationChunks, { type: mimeType });
+      if ((!speechSeen && !voiceConversationManualStop) || blob.size < 1500) {
+        setInputHint(uiText.voice_chat_empty);
+        setTimeout(() => startVoiceConversationTurn(), 500);
+        return;
+      }
+      await processVoiceConversationBlob(blob);
+    };
+
+    voiceConversationRecorder.start();
+    updateVoiceConversationButton('listening');
+    setInputHint(uiText.voice_chat_listening);
+
+    const monitorSilence = () => {
+      if (!voiceConversationActive || !voiceConversationRecorder || voiceConversationRecorder.state !== 'recording') return;
+      analyser.getByteTimeDomainData(buffer);
+      let sum = 0;
+      for (let i = 0; i < buffer.length; i++) {
+        const value = (buffer[i] - 128) / 128;
+        sum += value * value;
+      }
+      const rms = Math.sqrt(sum / buffer.length);
+      const now = Date.now();
+      const isSpeech = rms > 0.018;
+
+      if (isSpeech) {
+        speechSeen = true;
+        silenceSince = null;
+      } else if (speechSeen) {
+        silenceSince = silenceSince || now;
+      }
+
+      const enoughSilence = speechSeen && silenceSince && now - silenceSince > 1200 && now - startedAt > 1200;
+      const tooLong = now - startedAt > 20000;
+      const noSpeechTimeout = !speechSeen && now - startedAt > 9000;
+      if (enoughSilence || tooLong || noSpeechTimeout) {
+        try { voiceConversationRecorder.stop(); } catch (e) {}
+        return;
+      }
+
+      voiceConversationMonitor = requestAnimationFrame(monitorSilence);
+    };
+    voiceConversationMonitor = requestAnimationFrame(monitorSilence);
+  } catch (e) {
+    console.error('Voice conversation micro error:', e);
+    alert(uiText.voice_micro_error);
+    stopVoiceConversation();
+  }
+}
+
+async function processVoiceConversationBlob(blob) {
+  try {
+    updateVoiceConversationButton('thinking');
+    setInputHint(uiText.voice_transcribing);
+    const text = await requestTranscription(blob);
+    if (!text) {
+      setInputHint(uiText.voice_chat_empty);
+      return;
+    }
+
+    setInputHint(uiText.voice_chat_thinking);
+    const data = await sendMessage(text, { fromVoice: true });
+    if (voiceConversationActive && data && data.success && data.content) {
+      updateVoiceConversationButton('speaking');
+      setInputHint(uiText.voice_chat_speaking);
+      await speakAssistantText(data.content);
+    }
+  } catch (e) {
+    console.error('Voice conversation error:', e);
+    appendAiMsg((e.message || uiText.voice_chat_error), document.getElementById('model-select').value, true);
+  } finally {
+    if (voiceConversationActive) {
+      updateVoiceConversationButton('listening');
+      setInputHint(uiText.voice_chat_listening);
+      setTimeout(() => startVoiceConversationTurn(), 400);
+    }
+  }
+}
+
+async function speakAssistantText(text) {
+  try {
+    const resp = await fetch('speak.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, format: 'mp3' }),
+    });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error || uiText.voice_chat_error);
+
+    return new Promise((resolve, reject) => {
+      const audio = new Audio(`data:${data.mime || 'audio/mpeg'};base64,${data.audio_base64}`);
+      voiceConversationAudio = audio;
+      audio.onended = resolve;
+      audio.onerror = () => reject(new Error(uiText.voice_chat_error));
+      audio.play().catch(reject);
+    });
+  } catch (e) {
+    console.warn('Mistral TTS fallback:', e);
+    setInputHint(uiText.voice_chat_browser_fallback);
+    return speakWithBrowserVoice(text);
+  }
+}
+
+function speakWithBrowserVoice(text) {
+  if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+    throw new Error(uiText.voice_chat_error);
+  }
+
+  return new Promise((resolve, reject) => {
+    const cleaned = String(text)
+      .replace(/```[\s\S]*?```/g, ' bloc de code omis. ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/[#*_>\[\]\(\)]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1800);
+    if (!cleaned) {
+      resolve();
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(cleaned);
+    utterance.lang = uiLanguage || 'fr';
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.onend = resolve;
+    utterance.onerror = () => reject(new Error(uiText.voice_chat_error));
+    window.speechSynthesis.speak(utterance);
+    voiceConversationAudio = {
+      pause: () => window.speechSynthesis.cancel(),
+    };
+  });
+}
+
+async function sendMessage(messageOverride = null, options = {}) {
   if (isBusy) return;
 
   const input  = document.getElementById('msg-input');
-  const msg    = input.value.trim();
+  const msg    = (messageOverride === null ? input.value : messageOverride).trim();
   const model  = document.getElementById('model-select').value;
 
   if (!msg) return;
 
   isBusy = true;
   document.getElementById('send-btn').disabled = true;
-  input.disabled = true;
+  if (!options.fromVoice) input.disabled = true;
 
   // Hide welcome
   document.getElementById('welcome').style.display = 'none';
 
   // Append user message
   appendUserMsg(msg);
-  input.value = '';
-  input.style.height = 'auto';
+  if (messageOverride === null) {
+    input.value = '';
+    input.style.height = 'auto';
+  }
 
   // Thinking indicator
   const thinkId = appendThinking();
@@ -1678,19 +1978,22 @@ async function sendMessage() {
         currentConvId = data.conversation_id;
         addConvToSidebar(data.conversation_id, msg);
       }
+      return data;
     } else {
       appendAiMsg((data.error || uiText.unknown_error), model, true);
+      return data;
     }
 
   } catch(e) {
     removeThinking(thinkId);
     appendAiMsg(uiText.connection_error + e.message, model, true);
+    return { success: false, error: e.message };
+  } finally {
+    isBusy = false;
+    input.disabled = false;
+    if (!options.fromVoice) input.focus();
+    scrollBottom();
   }
-
-  isBusy = false;
-  input.disabled = false;
-  input.focus();
-  scrollBottom();
 }
 
 // ============================================================

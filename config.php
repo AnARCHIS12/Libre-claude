@@ -31,6 +31,9 @@ define('DEFAULT_MISTRAL_API_KEYS', [
 // Endpoint Mistral
 define('MISTRAL_API_ENDPOINT', 'https://api.mistral.ai/v1/chat/completions');
 define('MISTRAL_TRANSCRIPTION_ENDPOINT', 'https://api.mistral.ai/v1/audio/transcriptions');
+define('MISTRAL_SPEECH_ENDPOINT', 'https://api.mistral.ai/v1/audio/speech');
+define('MISTRAL_TTS_MODEL', libreclaude_env('MISTRAL_TTS_MODEL', 'voxtral-mini-tts-2603'));
+define('MISTRAL_TTS_VOICE_ID', libreclaude_env('MISTRAL_TTS_VOICE_ID', ''));
 
 // GitHub OAuth (optionnel)
 // Créez une OAuth App GitHub avec comme callback :
