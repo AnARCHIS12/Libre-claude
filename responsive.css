@@ -158,6 +158,14 @@ code,
 }
 
 @media (max-width: 520px) {
+  html,
+  body,
+  .main {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden !important;
+  }
+
   .card {
     padding: 20px !important;
   }
@@ -178,6 +186,24 @@ code,
   .input-wrap {
     padding-left: 10px;
     padding-right: 10px;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .input-inner,
+  .input-box {
+    width: 100%;
+    min-width: 0;
+    max-width: calc(100vw - 20px);
+    overflow: hidden;
+  }
+
+  #msg-input {
+    min-height: 48px;
+    max-height: 34dvh;
+    padding: 12px 14px 6px;
+    line-height: 1.45;
   }
 
   .starters {
@@ -195,22 +221,47 @@ code,
   .web-search-btn,
   .ocr-btn,
   .image-gen-btn {
-    width: 40px;
-    height: 40px;
+    width: 100%;
+    min-width: 0;
+    height: 38px;
   }
 
   .input-actions {
+    display: grid;
+    grid-template-columns: 1fr;
     align-items: stretch;
+    gap: 8px;
+    padding: 8px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .quick-btns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
     order: 2;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .quick-btn {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    justify-content: center;
+    padding: 6px 8px;
   }
 
   .input-tools {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(34px, 1fr));
     width: 100%;
-    justify-content: flex-end;
+    gap: 6px;
+    justify-content: stretch;
+    min-width: 0;
   }
 
   .model-menu {
@@ -252,5 +303,32 @@ code,
 
   .composer {
     border-radius: 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .input-wrap {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .input-inner,
+  .input-box {
+    max-width: calc(100vw - 16px);
+  }
+
+  .input-tools {
+    grid-template-columns: repeat(6, minmax(30px, 1fr));
+    gap: 5px;
+  }
+
+  .input-tools > button,
+  .send-btn,
+  .voice-btn,
+  .voice-call-btn,
+  .web-search-btn,
+  .ocr-btn,
+  .image-gen-btn {
+    height: 36px;
   }
 }

@@ -1186,13 +1186,33 @@ body {
 }
 
 @media (max-width: 768px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
   .sidebar {
     position: fixed;
     transform: translateX(-100%);
     z-index: 50;
   }
   .sidebar.open { transform: translateX(0); }
-  .main { width: 100%; }
+  .main {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+  .messages-wrap,
+  .input-wrap,
+  .input-inner,
+  .input-box {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
+  }
   .sidebar-toggle { display: flex; }
   .starters { grid-template-columns: 1fr; }
   .messages-inner { padding: 44px 14px 24px; }
@@ -1582,6 +1602,19 @@ const uiText = <?= json_encode([
     'release_unavailable' => $t('release_unavailable'),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const githubReleaseApi = <?= json_encode($githubReleaseApi) ?>;
+
+function syncAppHeight() {
+  const viewport = window.visualViewport;
+  const height = viewport ? viewport.height : window.innerHeight;
+  if (height) document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`);
+}
+
+syncAppHeight();
+window.addEventListener('resize', syncAppHeight);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', syncAppHeight);
+  window.visualViewport.addEventListener('scroll', syncAppHeight);
+}
 
 // ============================================================
 // AUTO RESIZE TEXTAREA
