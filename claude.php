@@ -115,6 +115,39 @@ class ClaudeClient {
         return ['success' => false, 'error' => 'La dictée vocale a échoué. Vérifiez vos clés Claude.'];
     }
 
+    public function chatWithWebSearch($messages, $model = 'mistral-large-2512', $options = []) {
+        $maxTries = count($this->apiKeys) * 2;
+        $lastError = '';
+
+        for ($i = 0; $i < $maxTries; $i++) {
+            $apiKey = $this->apiKeys[$this->currentKeyIndex];
+
+            try {
+                $result = $this->doConversationRequest($apiKey, $messages, $model, $options);
+                $parsed = $this->parseConversationResponse($result);
+                if (trim($parsed['content']) !== '') {
+                    return [
+                        'success' => true,
+                        'content' => trim($parsed['content']),
+                        'model'   => $model,
+                        'sources' => $parsed['sources'],
+                        'usage'   => $result['usage'] ?? [],
+                    ];
+                }
+                throw new Exception('Réponse web invalide');
+            } catch (Exception $e) {
+                $lastError = $e->getMessage();
+                libreclaude_log("Web search key[$this->currentKeyIndex] error: $lastError", 2);
+
+                if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false) {
+                    $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
+                }
+            }
+        }
+
+        return ['success' => false, 'error' => 'Recherche web Mistral impossible. ' . $lastError];
+    }
+
     public function speech($text, $voiceId = null, $format = 'mp3') {
         $cleanText = trim($text);
         if ($cleanText === '') {
@@ -184,7 +217,7 @@ class ClaudeClient {
         if ($error) throw new Exception("cURL: $error");
         if ($httpCode !== 200) {
             $decoded = json_decode($response, true);
-            $errMsg  = $decoded['message'] ?? $decoded['error']['message'] ?? "HTTP $httpCode";
+            $errMsg  = $this->normalizeApiError($decoded['message'] ?? $decoded['error']['message'] ?? $decoded['error'] ?? "HTTP $httpCode");
             throw new Exception($errMsg);
         }
 
@@ -224,13 +257,128 @@ class ClaudeClient {
         if ($error) throw new Exception("cURL: $error");
         if ($httpCode < 200 || $httpCode >= 300) {
             $decoded = json_decode($response, true);
-            $errMsg  = $decoded['message'] ?? $decoded['error']['message'] ?? "HTTP $httpCode";
+            $errMsg  = $this->normalizeApiError($decoded['message'] ?? $decoded['error']['message'] ?? $decoded['error'] ?? "HTTP $httpCode");
             throw new Exception($errMsg);
         }
 
         $decoded = json_decode($response, true);
         if (!$decoded) throw new Exception('JSON invalide');
         return $decoded;
+    }
+
+    private function doConversationRequest($apiKey, $messages, $model, $options) {
+        $tool = trim((string)($options['web_search_tool'] ?? MISTRAL_WEB_SEARCH_TOOL));
+        if ($tool === '') {
+            $tool = 'web_search';
+        }
+
+        $payload = [
+            'model'  => $model,
+            'inputs' => $messages,
+            'tools'  => [['type' => $tool]],
+        ];
+
+        $ch = curl_init(MISTRAL_CONVERSATIONS_ENDPOINT);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode($payload),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 90,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_USERAGENT      => 'Libre Claude/1.0 (PHP cURL)',
+            CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) throw new Exception("cURL: $error");
+        if ($httpCode < 200 || $httpCode >= 300) {
+            $decoded = json_decode($response, true);
+            $errMsg  = $this->normalizeApiError($decoded['message'] ?? $decoded['error']['message'] ?? $decoded['error'] ?? "HTTP $httpCode");
+            throw new Exception($errMsg);
+        }
+
+        $decoded = json_decode($response, true);
+        if (!$decoded) throw new Exception('JSON invalide');
+        return $decoded;
+    }
+
+    private function parseConversationResponse($response) {
+        $content = '';
+        $sources = [];
+        $this->walkConversationEntries($response, $content, $sources);
+
+        $deduped = [];
+        foreach ($sources as $source) {
+            $url = trim($source['url'] ?? '');
+            if ($url === '' || isset($deduped[$url])) continue;
+            $deduped[$url] = [
+                'title'  => trim($source['title'] ?? '') ?: parse_url($url, PHP_URL_HOST),
+                'url'    => $url,
+                'source' => trim($source['source'] ?? '') ?: parse_url($url, PHP_URL_HOST),
+            ];
+        }
+
+        return [
+            'content' => trim($content),
+            'sources' => array_values($deduped),
+        ];
+    }
+
+    private function walkConversationEntries($node, &$content, &$sources) {
+        if (!is_array($node)) return;
+
+        if (($node['type'] ?? '') === 'message.output' || (($node['role'] ?? '') === 'assistant' && isset($node['content']))) {
+            $this->extractConversationContent($node['content'] ?? '', $content, $sources);
+        } elseif (($node['type'] ?? '') === 'tool_reference' || isset($node['url'])) {
+            $this->maybeAddConversationSource($node, $sources);
+        }
+
+        foreach ($node as $value) {
+            if (is_array($value)) {
+                $this->walkConversationEntries($value, $content, $sources);
+            }
+        }
+    }
+
+    private function extractConversationContent($contentNode, &$content, &$sources) {
+        if (is_string($contentNode)) {
+            $content .= "\n" . $contentNode;
+            return;
+        }
+
+        if (!is_array($contentNode)) return;
+        foreach ($contentNode as $chunk) {
+            if (is_string($chunk)) {
+                $content .= "\n" . $chunk;
+                continue;
+            }
+            if (!is_array($chunk)) continue;
+
+            $type = $chunk['type'] ?? '';
+            if ($type === 'text' && isset($chunk['text'])) {
+                $content .= "\n" . $chunk['text'];
+            } elseif ($type === 'tool_reference' || isset($chunk['url'])) {
+                $this->maybeAddConversationSource($chunk, $sources);
+            }
+        }
+    }
+
+    private function maybeAddConversationSource($chunk, &$sources) {
+        $url = trim($chunk['url'] ?? '');
+        if ($url === '') return;
+        $sources[] = [
+            'title'  => $chunk['title'] ?? '',
+            'url'    => $url,
+            'source' => $chunk['source'] ?? '',
+        ];
     }
 
     private function doSpeechRequest($apiKey, $text, $voiceId, $format) {
@@ -270,7 +418,7 @@ class ClaudeClient {
         if ($error) throw new Exception("cURL: $error");
         if ($httpCode < 200 || $httpCode >= 300) {
             $decoded = json_decode($response, true);
-            $errMsg  = $decoded['message'] ?? $decoded['error']['message'] ?? "HTTP $httpCode";
+            $errMsg  = $this->normalizeApiError($decoded['message'] ?? $decoded['error']['message'] ?? $decoded['error'] ?? "HTTP $httpCode");
             throw new Exception($errMsg);
         }
 
@@ -300,6 +448,19 @@ class ClaudeClient {
             'opus' => 'audio/ogg; codecs=opus',
         ];
         return $map[$format] ?? 'audio/mpeg';
+    }
+
+    private function normalizeApiError($error) {
+        if (is_string($error)) {
+            return $error;
+        }
+        if (is_array($error)) {
+            return json_encode($error, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        if ($error === null) {
+            return 'Erreur API inconnue';
+        }
+        return (string)$error;
     }
 
     public function getModels() {

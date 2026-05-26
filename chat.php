@@ -43,6 +43,7 @@ if (defined('MODEL_ALIASES') && isset(MODEL_ALIASES[$modelAlias])) {
 }
 $convId   = isset($input['conversation_id']) ? (int)$input['conversation_id'] : null;
 $useHistory = !isset($input['use_history']) || (bool)$input['use_history'];
+$useWebSearch = !empty($input['web_search']);
 
 if ($message === '') {
     echo json_encode(['success' => false, 'error' => 'Message vide']);
@@ -117,6 +118,9 @@ try {
     // Système prompt
     $memoryContext = $userId ? memory_build_context($db, $user) : '';
     $systemPrompt = "Tu es Libre Claude, un assistant IA avancé basé sur Mistral AI. Tu es intelligent, précis, créatif et bienveillant. Tu réponds toujours en français sauf si l'utilisateur parle une autre langue. Tu peux coder, analyser, créer et planifier des tâches complexes.";
+    if ($useWebSearch) {
+        $systemPrompt .= " Quand la recherche web est activée, utilise l'outil web_search pour vérifier les informations récentes, cite les sources pertinentes et signale clairement si les résultats ne permettent pas de conclure.";
+    }
     if ($memoryContext !== '') {
         $systemPrompt .= "\n\n" . $memoryContext;
     }
@@ -148,10 +152,17 @@ try {
     }
 
     // Appel Mistral
-    $result = $claude->chat($apiMessages, $model, [
-        'temperature' => 0.7,
-        'max_tokens'  => 4096,
-    ]);
+    if ($useWebSearch) {
+        $result = $claude->chatWithWebSearch($apiMessages, $model, [
+            'temperature' => 0.3,
+            'web_search_tool' => MISTRAL_WEB_SEARCH_TOOL,
+        ]);
+    } else {
+        $result = $claude->chat($apiMessages, $model, [
+            'temperature' => 0.7,
+            'max_tokens'  => 4096,
+        ]);
+    }
 
     if ($result['success']) {
         $reply = $result['content'];
@@ -176,6 +187,8 @@ try {
             'model'           => $model,
             'model_name'      => $modelNames[$model] ?? $model,
             'conversation_id' => $convId,
+            'web_search'      => $useWebSearch,
+            'sources'         => $result['sources'] ?? [],
             'usage'           => $result['usage'] ?? [],
         ]);
     } else {

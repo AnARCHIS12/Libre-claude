@@ -971,7 +971,8 @@ body {
   flex-shrink: 0;
 }
 .voice-btn,
-.voice-call-btn {
+.voice-call-btn,
+.web-search-btn {
   width: 38px;
   height: 38px;
   border: 1px solid var(--border);
@@ -990,6 +991,11 @@ body {
   transform: scale(1.05);
 }
 .voice-call-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent2);
+  transform: scale(1.05);
+}
+.web-search-btn:hover {
   border-color: var(--accent);
   color: var(--accent2);
   transform: scale(1.05);
@@ -1013,6 +1019,73 @@ body {
 .voice-call-btn.thinking {
   background: rgba(255,255,255,.08);
   color: var(--warn);
+}
+.web-search-btn.active {
+  background: rgba(230,18,42,.18);
+  border-color: var(--accent);
+  color: var(--accent2);
+}
+
+.source-cards {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+.source-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--muted);
+  font-weight: 800;
+}
+.source-card {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  background: rgba(255,255,255,.035);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color .2s, background .2s, transform .15s;
+}
+.source-card:hover {
+  border-color: rgba(230,18,42,.55);
+  background: rgba(230,18,42,.08);
+  transform: translateY(-1px);
+}
+.source-index {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(230,18,42,.13);
+  color: var(--accent2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+.source-copy {
+  min-width: 0;
+}
+.source-name {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 700;
+}
+.source-url {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted2);
+  font-size: 11.5px;
 }
 
 .input-hint {
@@ -1311,6 +1384,9 @@ body {
             <button class="quick-btn" onclick="setPrompt(<?= $jsText('quick_plan_prompt') ?>)"><i class="fa-solid fa-list-check"></i><?= htmlspecialchars($t('plan')) ?></button>
           </div>
           <div class="input-tools">
+            <button class="web-search-btn" id="web-search-btn" onclick="toggleWebSearch()" type="button" title="<?= htmlspecialchars($t('web_search')) ?>" aria-label="<?= htmlspecialchars($t('web_search')) ?>">
+              <i class="fa-solid fa-globe"></i>
+            </button>
             <button class="voice-call-btn" id="voice-call-btn" onclick="toggleVoiceConversation()" type="button" title="<?= htmlspecialchars($t('voice_chat_title')) ?>" aria-label="<?= htmlspecialchars($t('voice_chat_title')) ?>">
               <i class="fa-solid fa-phone"></i>
             </button>
@@ -1360,6 +1436,7 @@ let voiceConversationAudio = null;
 let voiceConversationMonitor = null;
 let voiceConversationState = 'idle';
 let voiceConversationManualStop = false;
+let webSearchEnabled = false;
 const modelNames = <?= json_encode(array_reduce(MISTRAL_MODELS, function($carry, $models) {
     foreach ($models as $model) {
         $carry[$model['id']] = $model['name'];
@@ -1391,6 +1468,10 @@ const uiText = <?= json_encode([
     'voice_chat_error' => $t('voice_chat_error'),
     'voice_chat_empty' => $t('voice_chat_empty'),
     'voice_chat_browser_fallback' => $t('voice_chat_browser_fallback'),
+    'web_search' => $t('web_search'),
+    'web_search_on' => $t('web_search_on'),
+    'web_search_off' => $t('web_search_off'),
+    'web_sources' => $t('web_sources'),
     'unknown_error' => $t('unknown_error'),
     'connection_error' => $t('connection_error'),
     'code_copy' => $t('code_copy'),
@@ -1562,6 +1643,16 @@ document.addEventListener('click', event => {
 function setInputHint(text) {
   const hint = document.querySelector('.input-hint');
   if (hint) hint.textContent = text;
+}
+
+function toggleWebSearch() {
+  webSearchEnabled = !webSearchEnabled;
+  const btn = document.getElementById('web-search-btn');
+  if (btn) {
+    btn.classList.toggle('active', webSearchEnabled);
+    btn.setAttribute('aria-pressed', webSearchEnabled ? 'true' : 'false');
+  }
+  setInputHint(webSearchEnabled ? uiText.web_search_on : uiText.web_search_off);
 }
 
 async function toggleDictation() {
@@ -1976,14 +2067,21 @@ async function sendMessage(messageOverride = null, options = {}) {
         message: msg,
         model: model,
         conversation_id: currentConvId,
+        web_search: webSearchEnabled,
       }),
     });
 
-    const data = await resp.json();
+    const raw = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (jsonError) {
+      throw new Error(raw.trim() || 'Réponse serveur vide');
+    }
     removeThinking(thinkId);
 
     if (data.success) {
-      appendAiMsg(data.content, data.model);
+      appendAiMsg(data.content, data.model, false, data.sources || []);
       if (data.conversation_id && currentConvId !== data.conversation_id) {
         currentConvId = data.conversation_id;
         addConvToSidebar(data.conversation_id, msg);
@@ -2017,7 +2115,7 @@ function appendUserMsg(text) {
   list.appendChild(div);
 }
 
-function appendAiMsg(text, model, isErr = false) {
+function appendAiMsg(text, model, isErr = false, sources = []) {
   const list = document.getElementById('messages-list');
   const div  = document.createElement('div');
   div.className = 'msg msg-ai';
@@ -2032,9 +2130,39 @@ function appendAiMsg(text, model, isErr = false) {
         ${model ? `<span class="ai-model">${escHtml(modelShort)}</span>` : ''}
       </div>
       <div class="ai-content ${isErr ? 'err-content' : ''}">${renderMarkdown(text)}</div>
+      ${renderSources(sources)}
     </div>
   `;
   list.appendChild(div);
+}
+
+function renderSources(sources) {
+  if (!Array.isArray(sources) || sources.length === 0) return '';
+  const cards = sources.slice(0, 8).map((source, index) => {
+    const url = source.url || '';
+    if (!url) return '';
+    const title = source.title || source.source || url;
+    const label = source.source || safeHost(url);
+    return `
+      <a class="source-card" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer">
+        <span class="source-index">${index + 1}</span>
+        <span class="source-copy">
+          <span class="source-name">${escHtml(title)}</span>
+          <span class="source-url">${escHtml(label)}</span>
+        </span>
+      </a>
+    `;
+  }).join('');
+  if (!cards.trim()) return '';
+  return `<div class="source-cards"><div class="source-title">${escHtml(uiText.web_sources)}</div>${cards}</div>`;
+}
+
+function safeHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch (e) {
+    return url;
+  }
 }
 
 function appendThinking() {
