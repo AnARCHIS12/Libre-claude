@@ -192,6 +192,95 @@ class ClaudeClient {
         return ['success' => false, 'error' => $hint];
     }
 
+    public function ocrFile($filePath, $fileName, $mimeType = 'application/octet-stream') {
+        if (!is_readable($filePath)) {
+            return ['success' => false, 'error' => 'Fichier illisible'];
+        }
+
+        $maxTries = count($this->apiKeys) * 2;
+        $lastError = '';
+        for ($i = 0; $i < $maxTries; $i++) {
+            $apiKey = $this->apiKeys[$this->currentKeyIndex];
+            try {
+                $result = $this->doOcrRequest($apiKey, $filePath, $mimeType);
+                $text = $this->parseOcrText($result);
+                if (trim($text) === '') {
+                    throw new Exception('OCR vide');
+                }
+
+                return [
+                    'success' => true,
+                    'text'    => trim($text),
+                    'model'   => $result['model'] ?? MISTRAL_OCR_MODEL,
+                    'raw'     => $result,
+                ];
+            } catch (Exception $e) {
+                $lastError = $e->getMessage();
+                libreclaude_log("OCR key[$this->currentKeyIndex] error: $lastError", 2);
+
+                if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false) {
+                    $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
+                }
+            }
+        }
+
+        return ['success' => false, 'error' => 'Analyse OCR Mistral impossible. ' . $lastError];
+    }
+
+    public function generateImage($prompt) {
+        $prompt = trim($prompt);
+        if ($prompt === '') {
+            return ['success' => false, 'error' => 'Prompt vide'];
+        }
+
+        $maxTries = count($this->apiKeys) * 2;
+        $lastError = '';
+        for ($i = 0; $i < $maxTries; $i++) {
+            $apiKey = $this->apiKeys[$this->currentKeyIndex];
+            try {
+                $agentId = trim((string)MISTRAL_IMAGE_AGENT_ID);
+                if ($agentId === '') {
+                    $agent = $this->createImageAgent($apiKey);
+                    $agentId = $agent['id'];
+                }
+                $response = $this->doImageConversationRequest($apiKey, $agentId, $prompt);
+                $parsed = $this->parseImageConversationResponse($response);
+                $images = [];
+
+                foreach ($parsed['files'] as $fileId) {
+                    $download = $this->downloadMistralFileContent($apiKey, $fileId);
+                    if (!empty($download['base64'])) {
+                        $images[] = [
+                            'file_id' => $fileId,
+                            'mime'    => $download['mime'] ?? 'image/png',
+                            'base64'  => $download['base64'],
+                        ];
+                    }
+                }
+
+                if (!$images) {
+                    throw new Exception('Aucune image générée dans la réponse Mistral');
+                }
+
+                return [
+                    'success' => true,
+                    'content' => trim($parsed['content']) ?: 'Image générée.',
+                    'model'   => $response['model'] ?? MISTRAL_IMAGE_MODEL,
+                    'images'  => $images,
+                ];
+            } catch (Exception $e) {
+                $lastError = $e->getMessage();
+                libreclaude_log("Image generation key[$this->currentKeyIndex] error: $lastError", 2);
+
+                if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false) {
+                    $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
+                }
+            }
+        }
+
+        return ['success' => false, 'error' => 'Génération d’image Mistral impossible. ' . $lastError];
+    }
+
     private function doRequest($apiKey, $params) {
         $ch = curl_init(MISTRAL_API_ENDPOINT);
 
@@ -437,6 +526,200 @@ class ClaudeClient {
         }
 
         throw new Exception('JSON invalide');
+    }
+
+    private function doOcrRequest($apiKey, $filePath, $mimeType) {
+        $bytes = file_get_contents($filePath);
+        if ($bytes === false || $bytes === '') {
+            throw new Exception('Fichier OCR vide');
+        }
+
+        $isImage = strpos($mimeType, 'image/') === 0;
+        $field = $isImage ? 'image_url' : 'document_url';
+        $payload = [
+            'model' => MISTRAL_OCR_MODEL,
+            'document' => [
+                'type' => $field,
+                $field => 'data:' . $mimeType . ';base64,' . base64_encode($bytes),
+            ],
+            'include_image_base64' => false,
+        ];
+
+        try {
+            return $this->postJson($apiKey, MISTRAL_OCR_ENDPOINT, $payload, 120);
+        } catch (Exception $e) {
+            $payload['document'][$field] = ['url' => 'data:' . $mimeType . ';base64,' . base64_encode($bytes)];
+            return $this->postJson($apiKey, MISTRAL_OCR_ENDPOINT, $payload, 120);
+        }
+    }
+
+    private function createImageAgent($apiKey) {
+        $payload = [
+            'model' => MISTRAL_IMAGE_MODEL,
+            'name' => 'Libre Claude Image',
+            'description' => 'Agent Libre Claude pour générer des images.',
+            'instructions' => 'Génère des images à la demande avec l outil image_generation. Réponds brièvement en français.',
+            'tools' => [['type' => 'image_generation']],
+            'completion_args' => [
+                'temperature' => 0.3,
+                'top_p' => 0.95,
+            ],
+        ];
+
+        $result = $this->postJson($apiKey, MISTRAL_AGENTS_ENDPOINT, $payload, 90);
+        if (empty($result['id'])) {
+            throw new Exception('Agent image Mistral invalide');
+        }
+        return $result;
+    }
+
+    private function doImageConversationRequest($apiKey, $agentId, $prompt) {
+        $payload = [
+            'agent_id' => $agentId,
+            'inputs' => [[
+                'role' => 'user',
+                'content' => $prompt,
+            ]],
+        ];
+
+        return $this->postJson($apiKey, MISTRAL_CONVERSATIONS_ENDPOINT, $payload, 180);
+    }
+
+    private function postJson($apiKey, $endpoint, $payload, $timeout = 90) {
+        $ch = curl_init($endpoint);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode($payload),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => $timeout,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_USERAGENT      => 'Libre Claude/1.0 (PHP cURL)',
+            CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) throw new Exception("cURL: $error");
+        if ($httpCode < 200 || $httpCode >= 300) {
+            $decoded = json_decode($response, true);
+            $errMsg = $this->normalizeApiError($decoded['message'] ?? $decoded['error']['message'] ?? $decoded['error'] ?? "HTTP $httpCode");
+            throw new Exception($errMsg);
+        }
+
+        $decoded = json_decode($response, true);
+        if (!$decoded) throw new Exception('JSON invalide');
+        return $decoded;
+    }
+
+    private function downloadMistralFileContent($apiKey, $fileId) {
+        $url = rtrim(MISTRAL_FILES_ENDPOINT, '/') . '/' . rawurlencode($fileId) . '/content';
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 120,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_HEADER         => true,
+            CURLOPT_USERAGENT      => 'Libre Claude/1.0 (PHP cURL)',
+            CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $apiKey,
+            ],
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) throw new Exception("cURL: $error");
+        if ($httpCode < 200 || $httpCode >= 300) {
+            $body = substr((string)$response, (int)$headerSize);
+            $decoded = json_decode($body, true);
+            $errMsg = $this->normalizeApiError($decoded['message'] ?? $decoded['error']['message'] ?? $decoded['error'] ?? "HTTP $httpCode");
+            throw new Exception($errMsg);
+        }
+
+        $body = substr((string)$response, (int)$headerSize);
+        if ($body === '') {
+            throw new Exception('Image Mistral vide');
+        }
+
+        return [
+            'mime' => $contentType ?: 'image/png',
+            'base64' => base64_encode($body),
+        ];
+    }
+
+    private function parseOcrText($response) {
+        $parts = [];
+        if (!empty($response['pages']) && is_array($response['pages'])) {
+            foreach ($response['pages'] as $page) {
+                foreach (['markdown', 'text', 'content'] as $field) {
+                    if (!empty($page[$field]) && is_string($page[$field])) {
+                        $parts[] = trim($page[$field]);
+                        break;
+                    }
+                }
+            }
+        }
+
+        foreach (['markdown', 'text', 'content'] as $field) {
+            if (!empty($response[$field]) && is_string($response[$field])) {
+                $parts[] = trim($response[$field]);
+            }
+        }
+
+        return trim(implode("\n\n", array_filter($parts)));
+    }
+
+    private function parseImageConversationResponse($response) {
+        $content = '';
+        $files = [];
+        $this->walkImageConversationResponse($response, $content, $files);
+        return [
+            'content' => trim($content),
+            'files' => array_values(array_unique(array_filter($files))),
+        ];
+    }
+
+    private function walkImageConversationResponse($node, &$content, &$files) {
+        if (is_string($node)) {
+            return;
+        }
+        if (!is_array($node)) {
+            return;
+        }
+
+        $type = $node['type'] ?? '';
+        if ($type === 'text' && isset($node['text'])) {
+            $content .= "\n" . $node['text'];
+        } elseif (($node['role'] ?? '') === 'assistant' && isset($node['content'])) {
+            $unusedSources = [];
+            $this->extractConversationContent($node['content'], $content, $unusedSources);
+        }
+
+        foreach (['file_id', 'fileId'] as $field) {
+            if (!empty($node[$field]) && is_string($node[$field])) {
+                $files[] = $node[$field];
+            }
+        }
+        if (!empty($node['file']) && is_array($node['file']) && !empty($node['file']['id'])) {
+            $files[] = $node['file']['id'];
+        }
+
+        foreach ($node as $value) {
+            if (is_array($value)) {
+                $this->walkImageConversationResponse($value, $content, $files);
+            }
+        }
     }
 
     private function audioMimeType($format) {

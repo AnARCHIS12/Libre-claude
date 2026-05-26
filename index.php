@@ -972,7 +972,9 @@ body {
 }
 .voice-btn,
 .voice-call-btn,
-.web-search-btn {
+.web-search-btn,
+.ocr-btn,
+.image-gen-btn {
   width: 38px;
   height: 38px;
   border: 1px solid var(--border);
@@ -995,7 +997,9 @@ body {
   color: var(--accent2);
   transform: scale(1.05);
 }
-.web-search-btn:hover {
+.web-search-btn:hover,
+.ocr-btn:hover,
+.image-gen-btn:hover {
   border-color: var(--accent);
   color: var(--accent2);
   transform: scale(1.05);
@@ -1024,6 +1028,11 @@ body {
   background: rgba(230,18,42,.18);
   border-color: var(--accent);
   color: var(--accent2);
+}
+.ocr-btn.loading,
+.image-gen-btn.loading {
+  pointer-events: none;
+  opacity: .75;
 }
 
 .source-cards {
@@ -1086,6 +1095,37 @@ body {
   text-overflow: ellipsis;
   color: var(--muted2);
   font-size: 11.5px;
+}
+
+.generated-images {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.generated-image-card {
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255,255,255,.035);
+}
+.generated-image-card img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+.generated-image-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+.generated-image-actions a {
+  color: var(--accent2);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .input-hint {
@@ -1385,6 +1425,13 @@ body {
             <button class="quick-btn" onclick="setPrompt(<?= $jsText('quick_plan_prompt') ?>)"><i class="fa-solid fa-list-check"></i><?= htmlspecialchars($t('plan')) ?></button>
           </div>
           <div class="input-tools">
+            <input id="ocr-file-input" type="file" accept="image/*,.pdf,.docx,.pptx" hidden onchange="handleOcrFile(this)">
+            <button class="ocr-btn" id="ocr-btn" onclick="triggerOcrUpload()" type="button" title="<?= htmlspecialchars($t('ocr_analyze')) ?>" aria-label="<?= htmlspecialchars($t('ocr_analyze')) ?>">
+              <i class="fa-solid fa-file-image"></i>
+            </button>
+            <button class="image-gen-btn" id="image-gen-btn" onclick="generateImageFromPrompt()" type="button" title="<?= htmlspecialchars($t('image_generate')) ?>" aria-label="<?= htmlspecialchars($t('image_generate')) ?>">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
             <button class="web-search-btn" id="web-search-btn" onclick="toggleWebSearch()" type="button" title="<?= htmlspecialchars($t('web_search')) ?>" aria-label="<?= htmlspecialchars($t('web_search')) ?>">
               <i class="fa-solid fa-globe"></i>
             </button>
@@ -1473,6 +1520,15 @@ const uiText = <?= json_encode([
     'web_search_on' => $t('web_search_on'),
     'web_search_off' => $t('web_search_off'),
     'web_sources' => $t('web_sources'),
+    'ocr_analyze' => $t('ocr_analyze'),
+    'ocr_uploading' => $t('ocr_uploading'),
+    'ocr_default_prompt' => $t('ocr_default_prompt'),
+    'ocr_error' => $t('ocr_error'),
+    'image_generate' => $t('image_generate'),
+    'image_prompt_required' => $t('image_prompt_required'),
+    'image_generating' => $t('image_generating'),
+    'image_error' => $t('image_error'),
+    'generated_images' => $t('generated_images'),
     'unknown_error' => $t('unknown_error'),
     'connection_error' => $t('connection_error'),
     'code_copy' => $t('code_copy'),
@@ -1654,6 +1710,134 @@ function toggleWebSearch() {
     btn.setAttribute('aria-pressed', webSearchEnabled ? 'true' : 'false');
   }
   setInputHint(webSearchEnabled ? uiText.web_search_on : uiText.web_search_off);
+}
+
+function triggerOcrUpload() {
+  if (!isLoggedIn) {
+    setInputHint(uiText.voice_login);
+    return;
+  }
+  if (isBusy) return;
+  const input = document.getElementById('ocr-file-input');
+  if (input) input.click();
+}
+
+async function handleOcrFile(input) {
+  const file = input.files && input.files[0] ? input.files[0] : null;
+  input.value = '';
+  if (!file || isBusy) return;
+
+  const promptInput = document.getElementById('msg-input');
+  const prompt = promptInput.value.trim() || uiText.ocr_default_prompt;
+  const model = document.getElementById('model-select').value;
+  const btn = document.getElementById('ocr-btn');
+
+  isBusy = true;
+  btn && btn.classList.add('loading');
+  document.getElementById('send-btn').disabled = true;
+  promptInput.disabled = true;
+  document.getElementById('welcome').style.display = 'none';
+  appendUserMsg(`${uiText.ocr_analyze}: ${file.name}\n\n${prompt}`);
+  promptInput.value = '';
+  promptInput.style.height = 'auto';
+  const thinkId = appendThinking();
+  setInputHint(uiText.ocr_uploading);
+  scrollBottom();
+
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('prompt', prompt);
+    form.append('model', model);
+
+    const resp = await fetch('ocr.php', { method: 'POST', body: form });
+    const raw = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (jsonError) {
+      throw new Error(raw.trim() || 'Réponse serveur vide');
+    }
+
+    removeThinking(thinkId);
+    if (data.success) {
+      appendAiMsg(data.content, data.model || model);
+    } else {
+      appendAiMsg(data.error || uiText.ocr_error, model, true);
+    }
+  } catch (e) {
+    removeThinking(thinkId);
+    appendAiMsg(uiText.connection_error + e.message, model, true);
+  } finally {
+    isBusy = false;
+    btn && btn.classList.remove('loading');
+    promptInput.disabled = false;
+    promptInput.focus();
+    setInputHint(uiText.hint);
+    scrollBottom();
+  }
+}
+
+async function generateImageFromPrompt() {
+  if (!isLoggedIn) {
+    setInputHint(uiText.voice_login);
+    return;
+  }
+  if (isBusy) return;
+
+  const input = document.getElementById('msg-input');
+  const prompt = input.value.trim();
+  const btn = document.getElementById('image-gen-btn');
+  if (!prompt) {
+    setInputHint(uiText.image_prompt_required);
+    input.focus();
+    return;
+  }
+
+  const model = document.getElementById('model-select').value;
+  isBusy = true;
+  btn && btn.classList.add('loading');
+  document.getElementById('send-btn').disabled = true;
+  input.disabled = true;
+  document.getElementById('welcome').style.display = 'none';
+  appendUserMsg(`${uiText.image_generate}: ${prompt}`);
+  input.value = '';
+  input.style.height = 'auto';
+  const thinkId = appendThinking();
+  setInputHint(uiText.image_generating);
+  scrollBottom();
+
+  try {
+    const resp = await fetch('image_generate.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    const raw = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (jsonError) {
+      throw new Error(raw.trim() || 'Réponse serveur vide');
+    }
+
+    removeThinking(thinkId);
+    if (data.success) {
+      appendAiMsg(data.content || uiText.generated_images, data.model || model, false, [], data.images || []);
+    } else {
+      appendAiMsg(data.error || uiText.image_error, model, true);
+    }
+  } catch (e) {
+    removeThinking(thinkId);
+    appendAiMsg(uiText.connection_error + e.message, model, true);
+  } finally {
+    isBusy = false;
+    btn && btn.classList.remove('loading');
+    input.disabled = false;
+    input.focus();
+    setInputHint(uiText.hint);
+    scrollBottom();
+  }
 }
 
 async function toggleDictation() {
@@ -2116,7 +2300,7 @@ function appendUserMsg(text) {
   list.appendChild(div);
 }
 
-function appendAiMsg(text, model, isErr = false, sources = []) {
+function appendAiMsg(text, model, isErr = false, sources = [], images = []) {
   const list = document.getElementById('messages-list');
   const div  = document.createElement('div');
   div.className = 'msg msg-ai';
@@ -2132,6 +2316,7 @@ function appendAiMsg(text, model, isErr = false, sources = []) {
       </div>
       <div class="ai-content ${isErr ? 'err-content' : ''}">${renderMarkdown(text)}</div>
       ${renderSources(sources)}
+      ${renderImages(images)}
     </div>
   `;
   list.appendChild(div);
@@ -2156,6 +2341,26 @@ function renderSources(sources) {
   }).join('');
   if (!cards.trim()) return '';
   return `<div class="source-cards"><div class="source-title">${escHtml(uiText.web_sources)}</div>${cards}</div>`;
+}
+
+function renderImages(images) {
+  if (!Array.isArray(images) || images.length === 0) return '';
+  const cards = images.slice(0, 6).map((image, index) => {
+    const mime = image.mime || 'image/png';
+    const base64 = image.base64 || '';
+    if (!base64) return '';
+    const url = `data:${mime};base64,${base64}`;
+    return `
+      <div class="generated-image-card">
+        <img src="${url}" alt="${escHtml(uiText.generated_images)} ${index + 1}" loading="lazy">
+        <div class="generated-image-actions">
+          <a href="${url}" download="libre-claude-image-${index + 1}.png">${escHtml(uiText.generated_images)}</a>
+        </div>
+      </div>
+    `;
+  }).join('');
+  if (!cards.trim()) return '';
+  return `<div class="generated-images">${cards}</div>`;
 }
 
 function safeHost(url) {
