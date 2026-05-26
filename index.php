@@ -1142,6 +1142,7 @@ body {
   border-radius: 12px;
   overflow: hidden;
   background: rgba(255,255,255,.035);
+  position: relative;
 }
 .generated-image-card img {
   width: 100%;
@@ -1149,17 +1150,28 @@ body {
   aspect-ratio: 1 / 1;
   object-fit: cover;
 }
-.generated-image-actions {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px;
-  border-top: 1px solid var(--border);
-}
-.generated-image-actions a {
-  color: var(--accent2);
+.generated-image-download {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(10,10,15,.82);
+  color: #fff;
   text-decoration: none;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
+  transition: transform .15s, background .15s, border-color .15s;
+}
+.generated-image-download:hover {
+  transform: translateY(-1px);
+  background: rgba(230,18,42,.92);
+  border-color: rgba(255,255,255,.22);
 }
 
 .input-hint {
@@ -2486,9 +2498,9 @@ function renderImages(images) {
     return `
       <div class="generated-image-card">
         <img src="${url}" alt="${escHtml(uiText.generated_images)} ${index + 1}" loading="lazy">
-        <div class="generated-image-actions">
-          <a href="${url}" download="libre-claude-image-${index + 1}.png">${escHtml(uiText.generated_images)}</a>
-        </div>
+        <a class="generated-image-download" href="${url}" download="libre-claude-image-${index + 1}.png" title="${escHtml(uiText.generated_images)}" aria-label="${escHtml(uiText.generated_images)}">
+          <i class="fa-solid fa-download"></i>
+        </a>
       </div>
     `;
   }).join('');
