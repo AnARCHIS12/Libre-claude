@@ -1942,6 +1942,11 @@ function isImagePrompt(text) {
   if (new RegExp(`\\b(dessine|illustre|draw)\\b`).test(s)) return true;
   if (new RegExp(`\\b(image|photo|illustration|affiche|poster|visuel|avatar|logo)\\s+(de|d |pour)\\b`).test(s)) return true;
   if (/^\s*(genere|generer|cree|creer|fais|fait|make|create)\s+(un|une|des)\s+chat\b/.test(s)) return true;
+  const words = s.trim().split(/\s+/).filter(Boolean);
+  const asksForText = /\b(explique|analyse|resume|recherche|cherche|pourquoi|comment|quoi|qui|quand|code|ecris|redige|traduis|corrige)\b/.test(s);
+  const visualNoun = /\b(chat|mouton|chien|animal|personnage|portrait|paysage|scene|robot|voiture|maison|ville|logo|affiche|poster|avatar|icone|mascotte|dessin|illustration)\b/.test(s);
+  const visualCue = /\b(rouge|noir|bleu|vert|jaune|rose|violet|orange|blanc|punk|anarchiste|realiste|stylise|style|minimaliste|3d|anime|manga|vectoriel|cinematique)\b/.test(s);
+  if (words.length <= 14 && !asksForText && visualNoun && visualCue) return true;
   return false;
 }
 
