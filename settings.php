@@ -6,6 +6,7 @@ require_once dirname(__FILE__) . '/config.php';
 require_once dirname(__FILE__) . '/auth.php';
 require_once dirname(__FILE__) . '/i18n.php';
 require_once dirname(__FILE__) . '/memory.php';
+require_once dirname(__FILE__) . '/ui_confirm.php';
 
 $db = Database::getInstance();
 if (!$db->isInstalled()) {
@@ -228,7 +229,7 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:28px;margin-bottom:32px
           <p><?= htmlspecialchars($memory['content']) ?></p>
           <div class="memory-meta"><?= htmlspecialchars((($memory['scope'] ?? '') === 'workspace') ? $t('workspace') : $t('memory_general')) ?> · <?= htmlspecialchars(date('d/m/Y H:i', strtotime($memory['updated_at']))) ?></div>
         </div>
-        <form method="POST" onsubmit="return confirm('<?= htmlspecialchars($t('delete_memory_confirm'), ENT_QUOTES) ?>')">
+        <form method="POST" data-confirm="<?= htmlspecialchars($t('delete_memory_confirm'), ENT_QUOTES) ?>">
           <input type="hidden" name="action" value="delete_memory">
           <input type="hidden" name="memory_id" value="<?= (int)$memory['id'] ?>">
           <button type="submit" class="btn-ghost"><?= htmlspecialchars($t('delete')) ?></button>
@@ -254,5 +255,6 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:28px;margin-bottom:32px
     <?php endforeach; ?>
   </div>
 </div>
+<?php render_confirm_ui($t); ?>
 </body>
 </html>

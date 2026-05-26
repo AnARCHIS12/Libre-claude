@@ -5,6 +5,7 @@
 require_once dirname(__FILE__) . '/config.php';
 require_once dirname(__FILE__) . '/auth.php';
 require_once dirname(__FILE__) . '/i18n.php';
+require_once dirname(__FILE__) . '/ui_confirm.php';
 
 $db = Database::getInstance();
 if (!$db->isInstalled()) {
@@ -230,12 +231,13 @@ input:focus{outline:none;border-color:var(--accent)}
         <div class="actions">
           <form method="POST"><input type="hidden" name="action" value="test"><input type="hidden" name="id" value="<?= htmlspecialchars($item['id']) ?>"><button class="btn secondary" type="submit"><?= htmlspecialchars($t('test')) ?></button></form>
           <form method="POST"><input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="<?= htmlspecialchars($item['id']) ?>"><button class="btn secondary" type="submit"><?= htmlspecialchars(!empty($item['active']) ? $t('disable') : $t('enable')) ?></button></form>
-          <form method="POST" onsubmit="return confirm('<?= htmlspecialchars($t('delete_key_confirm')) ?>')"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= htmlspecialchars($item['id']) ?>"><button class="btn danger" type="submit"><?= htmlspecialchars($t('delete')) ?></button></form>
+          <form method="POST" data-confirm="<?= htmlspecialchars($t('delete_key_confirm'), ENT_QUOTES) ?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= htmlspecialchars($item['id']) ?>"><button class="btn danger" type="submit"><?= htmlspecialchars($t('delete')) ?></button></form>
         </div>
       </div>
       <?php endforeach; ?>
     <?php endif; ?>
   </div>
 </div>
+<?php render_confirm_ui($t); ?>
 </body>
 </html>

@@ -5,6 +5,7 @@
 require_once dirname(__FILE__) . '/config.php';
 require_once dirname(__FILE__) . '/auth.php';
 require_once dirname(__FILE__) . '/i18n.php';
+require_once dirname(__FILE__) . '/ui_confirm.php';
 
 $db = Database::getInstance();
 if (!$db->isInstalled()) {
@@ -146,7 +147,7 @@ pre{white-space:pre-wrap;background:#050506;border:1px solid var(--border);borde
         </div>
         <div>
           <?php if ($token['is_active']): ?>
-          <form method="POST" onsubmit="return confirm('<?= htmlspecialchars($t('revoke_key_confirm')) ?>')">
+          <form method="POST" data-confirm="<?= htmlspecialchars($t('revoke_key_confirm'), ENT_QUOTES) ?>">
             <input type="hidden" name="action" value="revoke">
             <input type="hidden" name="id" value="<?= (int)$token['id'] ?>">
             <button class="btn danger" type="submit"><?= htmlspecialchars($t('revoke')) ?></button>
@@ -173,5 +174,6 @@ curl <?= htmlspecialchars($chatUrl) ?> \
   -d '{"conversation_id":1,"message":"<?= htmlspecialchars($t('continue_message')) ?>","model":"claude-opus-4.5"}'</pre>
   </div>
 </div>
+<?php render_confirm_ui($t); ?>
 </body>
 </html>

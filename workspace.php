@@ -7,6 +7,7 @@ require_once dirname(__FILE__) . '/auth.php';
 require_once dirname(__FILE__) . '/database.php';
 require_once dirname(__FILE__) . '/i18n.php';
 require_once dirname(__FILE__) . '/claude.php';
+require_once dirname(__FILE__) . '/ui_confirm.php';
 
 $db = Database::getInstance();
 if (!$db->isInstalled()) {
@@ -1083,7 +1084,7 @@ select,.branch-input,input,textarea{background:#0d0d15;color:var(--text);border-
           <?= htmlspecialchars($t('github_connected_as')) ?>
           <?= htmlspecialchars(trim(($github['owner'] ?? '') . '/' . ($github['repo'] ?? ''), '/')) ?>
         </div>
-        <form method="POST" onsubmit="return confirm(<?= htmlspecialchars(json_encode($t('github_disconnect_confirm')), ENT_QUOTES) ?>)">
+        <form method="POST" data-confirm="<?= htmlspecialchars($t('github_disconnect_confirm'), ENT_QUOTES) ?>">
           <input type="hidden" name="action" value="disconnect_github">
           <button class="btn" type="submit"><i class="fa-solid fa-link-slash"></i><?= htmlspecialchars($t('disconnect_github')) ?></button>
         </form>
@@ -1763,5 +1764,6 @@ document.querySelectorAll('[data-review-tab]').forEach(btn => {
 });
 refreshGeneratedReview();
 </script>
+<?php render_confirm_ui($t); ?>
 </body>
 </html>

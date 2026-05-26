@@ -7,6 +7,7 @@ require_once dirname(__FILE__) . '/config.php';
 require_once dirname(__FILE__) . '/auth.php';
 require_once dirname(__FILE__) . '/database.php';
 require_once dirname(__FILE__) . '/i18n.php';
+require_once dirname(__FILE__) . '/ui_confirm.php';
 
 $db = Database::getInstance();
 if (!$db->isInstalled()) {
@@ -1500,7 +1501,7 @@ async function loadConversation(id) {
 // DELETE CONVERSATION
 // ============================================================
 async function deleteConversation(id) {
-  if (!confirm(uiText.delete_conversation_confirm)) return;
+  if (window.lcConfirm && !(await window.lcConfirm(uiText.delete_conversation_confirm))) return;
 
   try {
     const resp = await fetch('conversations.php?action=delete', {
@@ -2310,5 +2311,6 @@ async function loadLatestRelease() {
   }
 }
 </script>
+<?php render_confirm_ui($t); ?>
 </body>
 </html>
