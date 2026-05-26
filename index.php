@@ -1214,7 +1214,6 @@ body {
     overflow-x: hidden;
   }
   .sidebar-toggle { display: flex; }
-  .starters { grid-template-columns: 1fr; }
   .messages-inner { padding: 44px 14px 24px; }
   .welcome { padding: 18px 4px 8px; }
   .welcome-logo { width: min(220px, 68vw); }
