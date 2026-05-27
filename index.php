@@ -1247,9 +1247,15 @@ body {
   }
   .model-picker-btn { width: 100%; }
   .model-menu {
-    width: 100%;
-    max-height: min(360px, 58dvh);
-    z-index: 80;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: min(420px, calc(100dvh - 148px));
+    z-index: 1000;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -1785,6 +1791,13 @@ function toggleModelMenu(force = null) {
   menu.classList.toggle('open', open);
   btn.classList.toggle('open', open);
   btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  document.body.classList.toggle('model-menu-open', open);
+  if (open) {
+    setTimeout(() => {
+      const active = menu.querySelector('.model-option.active');
+      if (active) active.scrollIntoView({ block: 'nearest' });
+    }, 0);
+  }
 }
 
 function selectModel(button) {

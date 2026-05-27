@@ -267,8 +267,15 @@ code,
   }
 
   .model-menu {
-    max-height: min(360px, 58dvh);
-    z-index: 80;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: min(420px, calc(100dvh - 148px));
+    z-index: 1000;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .workspace-tabs,
