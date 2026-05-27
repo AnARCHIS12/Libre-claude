@@ -188,10 +188,16 @@ code,
     padding-right: 10px;
     width: 100%;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow: visible;
   }
 
-  .input-inner,
+  .input-inner {
+    width: 100%;
+    min-width: 0;
+    max-width: calc(100vw - 20px);
+    overflow: visible;
+  }
+
   .input-box {
     width: 100%;
     min-width: 0;
@@ -261,7 +267,8 @@ code,
   }
 
   .model-menu {
-    max-height: min(360px, 68vh);
+    max-height: min(360px, 58dvh);
+    z-index: 80;
   }
 
   .workspace-tabs,

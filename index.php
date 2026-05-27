@@ -1216,14 +1216,25 @@ body {
     min-width: 0;
     overflow-x: hidden;
   }
-  .messages-wrap,
+  .messages-wrap {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
+  }
   .input-wrap,
   .input-inner,
   .input-box {
     width: 100%;
     max-width: 100vw;
     min-width: 0;
-    overflow-x: hidden;
+  }
+  .input-wrap,
+  .input-inner {
+    overflow: visible;
+  }
+  .input-box {
+    overflow: hidden;
   }
   .sidebar-toggle { display: flex; }
   .messages-inner { padding: 44px 14px 24px; }
@@ -1231,8 +1242,15 @@ body {
   .welcome-logo { width: min(220px, 68vw); }
   .project-links { gap: 8px; }
   .input-wrap { padding: 10px 14px calc(16px + env(safe-area-inset-bottom)); }
+  .model-bar {
+    z-index: 40;
+  }
   .model-picker-btn { width: 100%; }
-  .model-menu { width: 100%; }
+  .model-menu {
+    width: 100%;
+    max-height: min(360px, 58dvh);
+    z-index: 80;
+  }
 }
 
 @media (max-height: 760px) {
