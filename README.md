@@ -17,9 +17,7 @@
 </p>
 
 <p align="center">
-  Merci à <a href="https://github.com/LaurentVoanh">LaurentVoanh</a> pour ce projet génial.
-</p>
-
+  
 ---
 
 ## Aperçu
