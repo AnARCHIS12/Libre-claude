@@ -1744,7 +1744,7 @@ async function loadConversation(id) {
     if (data.success && data.messages) {
       data.messages.forEach(m => {
         if (m.role === 'user') appendUserMsg(m.content);
-        else if (m.role === 'assistant') appendAiMsg(m.content, m.model_used || '');
+        else if (m.role === 'assistant') appendAiMsg(m.content, m.model_used || '', false, [], [], m.tokens_used || 0);
       });
       scrollBottom();
     }
@@ -2444,7 +2444,7 @@ async function sendMessage(messageOverride = null, options = {}) {
     removeThinking(thinkId);
 
     if (data.success) {
-      appendAiMsg(data.content, data.model, false, data.sources || []);
+      appendAiMsg(data.content, data.model, false, data.sources || [], [], data.usage ? data.usage.total_tokens : 0);
       if (data.conversation_id && currentConvId !== data.conversation_id) {
         currentConvId = data.conversation_id;
         addConvToSidebar(data.conversation_id, msg);
@@ -2478,7 +2478,7 @@ function appendUserMsg(text) {
   list.appendChild(div);
 }
 
-function appendAiMsg(text, model, isErr = false, sources = [], images = []) {
+function appendAiMsg(text, model, isErr = false, sources = [], images = [], tokensUsed = 0) {
   const list = document.getElementById('messages-list');
   const div  = document.createElement('div');
   div.className = 'msg msg-ai';
@@ -2491,6 +2491,7 @@ function appendAiMsg(text, model, isErr = false, sources = [], images = []) {
       <div class="ai-meta">
         <span class="ai-name">Libre Claude</span>
         ${model ? `<span class="ai-model">${escHtml(modelShort)}</span>` : ''}
+        ${tokensUsed > 0 ? `<span class="ai-tokens" style="font-size:11px;color:var(--muted);background:rgba(255,255,255,.05);padding:2px 6px;border-radius:6px;margin-left:6px;"><i class="fa-solid fa-microchip" style="margin-right:4px;"></i>${tokensUsed} tokens</span>` : ''}
       </div>
       <div class="ai-content ${isErr ? 'err-content' : ''}">${renderMarkdown(text)}</div>
       ${renderSources(sources)}

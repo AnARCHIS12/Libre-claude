@@ -50,7 +50,8 @@ Le projet utilise PHP pur, SQLite, cURL et des modèles affichés dans l'interfa
 - Génération d'images via les Agents Mistral et l'outil `image_generation`.
 - Interface multilingue : français, anglais, espagnol, allemand et italien.
 - Prévisualisation directe des blocs HTML/CSS/JS/SVG dans un panneau intégré.
-- Workspace utilisateur pour sauvegarder les blocs de code générés.
+- Workspace utilisateur pour sauvegarder localement les blocs de code générés (indépendant de GitHub).
+- Suivi de la consommation avec affichage des jetons (tokens) utilisés par réponse de l'IA.
 - Connexion GitHub par dépôt, branche et token optionnel pour afficher l'arborescence du repo.
 - Connexion GitHub OAuth : l'utilisateur autorise l'app, puis choisit un dépôt accessible.
 - Création de dépôts GitHub depuis le workspace.

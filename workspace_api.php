@@ -420,6 +420,46 @@ function workspace_generate_files($prompt, $contextFiles, $tree, $user, &$raw, &
     return $files;
 }
 
+$action = $input['action'] ?? 'publish';
+
+if ($action === 'save_block') {
+    $language = trim($input['language'] ?? 'text');
+    $content = $input['content'] ?? '';
+    $convId = isset($input['conversation_id']) ? (int)$input['conversation_id'] : null;
+    
+    $ext = 'txt';
+    $langLower = strtolower($language);
+    if ($langLower === 'javascript' || $langLower === 'js') $ext = 'js';
+    elseif ($langLower === 'html') $ext = 'html';
+    elseif ($langLower === 'css') $ext = 'css';
+    elseif ($langLower === 'php') $ext = 'php';
+    elseif ($langLower === 'svg') $ext = 'svg';
+    elseif ($langLower === 'python' || $langLower === 'py') $ext = 'py';
+    elseif ($langLower === 'sql') $ext = 'sql';
+    
+    $name = 'block_' . time() . '.' . $ext;
+    
+    try {
+        $insertedId = $db->insert('workspace_files', [
+            'user_id'                => $user['id'],
+            'name'                   => $name,
+            'language'               => $language,
+            'content'                => $content,
+            'source_conversation_id' => $convId,
+            'created_at'             => date('Y-m-d H:i:s'),
+            'updated_at'             => date('Y-m-d H:i:s'),
+        ]);
+        
+        if ($insertedId) {
+            workspace_api_response(200, ['success' => true, 'id' => $insertedId]);
+        } else {
+            workspace_api_response(500, ['success' => false, 'error' => 'Erreur lors de la sauvegarde']);
+        }
+    } catch (Exception $e) {
+        workspace_api_response(500, ['success' => false, 'error' => 'Erreur : ' . $e->getMessage()]);
+    }
+}
+
 $github = $db->fetch("SELECT * FROM workspace_github WHERE user_id = ?", [(int)$user['id']]);
 if (!$github || empty($github['token'])) {
     workspace_api_response(409, ['success' => false, 'error' => 'Aucun compte GitHub connecté']);
@@ -437,7 +477,6 @@ if ($owner === '' || $repo === '') {
     workspace_api_response(409, ['success' => false, 'error' => 'Aucun dépôt GitHub sélectionné']);
 }
 
-$action = $input['action'] ?? 'publish';
 $publish = !empty($input['publish']) || $action === 'publish' || $action === 'generate_and_publish';
 $files = workspace_clean_files($input['files'] ?? []);
 $rawReply = '';
