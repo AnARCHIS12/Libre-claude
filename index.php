@@ -837,6 +837,34 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.export-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.export-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(230, 18, 42, 0.1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-btn:hover {
+  background: rgba(230, 18, 42, 0.2);
+  border-color: var(--accent);
+}
+
+.model-picker-btn {
   gap: 10px;
   background: var(--card);
   border: 1px solid var(--border);
@@ -1502,6 +1530,15 @@ body {
             <?php endforeach; ?>
           <?php endforeach; ?>
         </div>
+        <!-- Export buttons -->
+        <div class="export-buttons" id="export-buttons" style="display: none;">
+          <button type="button" class="export-btn" onclick="exportConversation('markdown')" title="<?= htmlspecialchars($t('export_markdown')) ?>">
+            <i class="fa-solid fa-file-lines"></i>
+          </button>
+          <button type="button" class="export-btn" onclick="exportConversation('json')" title="<?= htmlspecialchars($t('export_json')) ?>">
+            <i class="fa-solid fa-file-code"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Textarea + actions -->
@@ -1686,13 +1723,88 @@ document.addEventListener('click', e => {
 // ============================================================
 // FILTER CONVERSATIONS
 // ============================================================
-function filterConvs(q) {
+let searchTimeout = null;
+async function filterConvs(q) {
   const items = document.querySelectorAll('.conv-item');
   const lq = q.toLowerCase();
+  
+  // Filtre local rapide pour les résultats immédiats
   items.forEach(el => {
     const t = el.querySelector('.conv-title').textContent.toLowerCase();
     el.style.display = (!q || t.includes(lq)) ? '' : 'none';
   });
+
+  // Recherche serveur pour le contenu des messages (avec délai)
+  if (searchTimeout) clearTimeout(searchTimeout);
+  
+  if (q.length >= 2) {
+    searchTimeout = setTimeout(async () => {
+      try {
+        const resp = await fetch(`conversations.php?action=search&q=${encodeURIComponent(q)}`);
+        const data = await resp.json();
+        if (data.success && data.conversations) {
+          updateConvListWithSearchResults(data.conversations, q);
+        }
+      } catch (e) {
+        console.error('Search error:', e);
+      }
+    }, 300);
+  } else {
+    // Réinitialiser la liste complète si la recherche est vide
+    refreshConversationList();
+  }
+}
+
+function updateConvListWithSearchResults(convs, query) {
+  const list = document.getElementById('conv-list');
+  if (!list) return;
+  
+  list.innerHTML = '';
+  
+  if (convs.length === 0) {
+    const noResultsText = typeof t !== 'undefined' ? t('search_no_results') : 'Aucun résultat pour';
+    list.innerHTML = `<div class="conv-empty" style="padding: 20px; text-align: center; color: var(--muted);">${noResultsText} "${query}"</div>`;
+    return;
+  }
+  
+  convs.forEach(conv => {
+    const div = document.createElement('div');
+    div.className = 'conv-item';
+    div.dataset.id = conv.id;
+    if (conv.id == currentConvId) div.classList.add('active');
+    
+    const matchIcon = conv.match_type === 'content' 
+      ? '<i class="fas fa-file-alt" style="font-size: 11px; color: var(--muted2); margin-right: 6px;"></i>' 
+      : '';
+    
+    div.innerHTML = `
+      <div class="conv-title">${matchIcon}${escapeHtml(conv.title || 'Sans titre')}</div>
+      <div class="conv-meta">
+        <span class="conv-model">${escapeHtml(conv.model_used || '')}</span>
+        <span class="conv-date">${formatDate(conv.updated_at)}</span>
+      </div>
+      <button class="conv-del" onclick="deleteConv(${conv.id}, event)" aria-label="Supprimer">
+        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+      </button>
+    `;
+    div.onclick = () => loadConv(conv.id);
+    list.appendChild(div);
+  });
+}
+
+// ============================================================
+// EXPORT CONVERSATION
+// ============================================================
+function exportConversation(format) {
+  if (!currentConvId) {
+    alert('Aucune conversation chargée');
+    return;
+  }
+  
+  const url = `conversations.php?action=export&id=${currentConvId}&format=${format}`;
+  window.open(url, '_blank');
 }
 
 // ============================================================
@@ -1718,6 +1830,12 @@ function newChat() {
   document.getElementById('send-btn').disabled = true;
   document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
   if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+  
+  // Hide export buttons when starting a new chat
+  const exportButtons = document.getElementById('export-buttons');
+  if (exportButtons) {
+    exportButtons.style.display = 'none';
+  }
 }
 
 // ============================================================
@@ -1736,6 +1854,12 @@ async function loadConversation(id) {
   });
 
   if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+
+  // Show export buttons when a conversation is loaded
+  const exportButtons = document.getElementById('export-buttons');
+  if (exportButtons) {
+    exportButtons.style.display = 'flex';
+  }
 
   try {
     const resp = await fetch(`conversations.php?action=messages&id=${id}`);

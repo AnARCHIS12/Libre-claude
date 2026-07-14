@@ -43,6 +43,8 @@ Le projet utilise PHP pur, SQLite, cURL et des modèles affichés dans l'interfa
 - Clé API personnelle configurable par utilisateur.
 - Pool de clés Claude serveur administrable depuis l'interface.
 - Clés API internes Libre Claude (`lc_sk_...`) pour intégrer vos propres scripts.
+- **Recherche dans l'historique** : recherche instantanée dans les titres et le contenu des messages.
+- **Export de conversations** : export en Markdown ou JSON pour sauvegarder et partager vos discussions.
 - Dictée vocale avec Voxtral (`voxtral-mini-latest`) depuis le champ de message.
 - Discussion vocale avec réponse audio Mistral ou voix locale du navigateur en fallback.
 - Recherche web Mistral avec rendu des sources dans le chat.
