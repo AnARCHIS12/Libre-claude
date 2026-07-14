@@ -3,5 +3,7 @@ DirectoryIndex index.php
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "same-origin"
+  Header always unset X-Powered-By
+  Header unset X-Powered-By
 </IfModule>
 
