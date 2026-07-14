@@ -842,7 +842,7 @@ body {
 .export-buttons {
   display: flex;
   gap: 8px;
-  margin-left: auto;
+  margin-left: 12px;
 }
 
 .export-btn {
