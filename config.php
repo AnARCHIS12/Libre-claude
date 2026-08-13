@@ -54,14 +54,17 @@ define('GITHUB_OAUTH_SCOPE', trim(libreclaude_env('GITHUB_OAUTH_SCOPE', '')));
 // Modèles organisés par catégorie
 define('MISTRAL_MODELS', [
     'flagship' => [
+        ['id' => 'mistral-large-latest', 'name' => 'Claude Opus 4.6', 'desc' => 'Dernière génération Large, alias stable'],
         ['id' => 'mistral-large-2512', 'name' => 'Claude Opus 4.5', 'desc' => 'Raisonnement avancé, contextes massifs'],
         ['id' => 'mistral-large-2411', 'name' => 'Claude Opus 4', 'desc' => 'Version stable entreprise'],
     ],
     'medium' => [
+        ['id' => 'mistral-medium-2604', 'name' => 'Claude Sonnet 4.6', 'desc' => 'Mistral Medium 3.5 — multimodal, agentique'],
         ['id' => 'mistral-medium-2508', 'name' => 'Claude Sonnet 4.5', 'desc' => 'Analyse textuelle, rédaction'],
         ['id' => 'mistral-medium-2505', 'name' => 'Claude Sonnet 4', 'desc' => 'RAG, synthèse documents'],
     ],
     'small' => [
+        ['id' => 'mistral-small-latest', 'name' => 'Claude Haiku 4.6', 'desc' => 'Mistral Small 4 — hybride rapide et efficace'],
         ['id' => 'mistral-small-2603', 'name' => 'Claude Haiku 4.5', 'desc' => 'Extraction masse, pipelines'],
         ['id' => 'mistral-small-2506', 'name' => 'Claude Haiku 4', 'desc' => 'Classification, tagging'],
     ],
@@ -94,10 +97,13 @@ define('MISTRAL_MODELS', [
 ]);
 
 define('MODEL_ALIASES', [
+    'claude-opus-4.6'        => 'mistral-large-latest',
     'claude-opus-4.5'        => 'mistral-large-2512',
     'claude-opus-4'          => 'mistral-large-2411',
+    'claude-sonnet-4.6'      => 'mistral-medium-2604',
     'claude-sonnet-4.5'      => 'mistral-medium-2508',
     'claude-sonnet-4'        => 'mistral-medium-2505',
+    'claude-haiku-4.6'       => 'mistral-small-latest',
     'claude-haiku-4.5'       => 'mistral-small-2603',
     'claude-haiku-4'         => 'mistral-small-2506',
     'claude-code-max'        => 'codestral-2508',

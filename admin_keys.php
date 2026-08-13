@@ -25,6 +25,18 @@ $error   = '';
 $lang = current_language($user);
 $t = fn($key) => t($key, $lang);
 
+// Sessions actives (dernière activité < 30 minutes)
+$activeSessions = $db->fetchAll(
+    "SELECT DISTINCT u.username, u.id, s.last_activity, s.ip_address
+     FROM sessions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.expires_at > datetime('now')
+       AND s.last_activity > datetime('now', '-30 minutes')
+     ORDER BY s.last_activity DESC",
+    []
+);
+$connectedCount = count($activeSessions);
+
 function load_mistral_keys($db) {
     $items = json_decode($db->getSetting('mistral_api_keys', '[]'), true);
     if (!is_array($items)) return [];
@@ -180,6 +192,8 @@ input:focus{outline:none;border-color:var(--accent)}
 .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .actions form{display:inline}
 @media(max-width:760px){.grid,.key-row{grid-template-columns:1fr}.actions{justify-content:flex-start}.logo{max-width:100%}.top{align-items:flex-start;flex-direction:column}}
+@keyframes pulse-green{0%,100%{box-shadow:0 0 4px #4ade80}50%{box-shadow:0 0 10px #4ade80,0 0 20px rgba(74,222,128,.35)}}
+.online-dot{animation:pulse-green 2s ease-in-out infinite}
 </style>
 <link rel="stylesheet" href="responsive.css">
 </head>
@@ -192,6 +206,37 @@ input:focus{outline:none;border-color:var(--accent)}
 
   <h1><?= htmlspecialchars($t('server_keys_title')) ?></h1>
   <p class="sub"><?= htmlspecialchars($t('server_keys_sub')) ?></p>
+
+  <!-- Utilisateurs connectés -->
+  <div class="card" style="margin-bottom:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0">Utilisateurs connectés</h2>
+      <span style="background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:#4ade80;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:700"><?= $connectedCount ?></span>
+    </div>
+    <?php if ($connectedCount === 0): ?>
+      <p class="meta" style="color:var(--muted);font-size:13px">Aucun utilisateur actif en ce moment.</p>
+    <?php else: ?>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <?php foreach ($activeSessions as $session): ?>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="online-dot" style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block"></span>
+            <span style="font-weight:600;font-size:14px"><?= htmlspecialchars($session['username']) ?></span>
+            <?php if (($session['id'] ?? '') == $user['id']): ?>
+            <span style="font-size:11px;background:rgba(230,18,42,.15);color:var(--accent2);border-radius:999px;padding:2px 8px">vous</span>
+            <?php endif; ?>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11.5px;color:var(--muted)"><?= htmlspecialchars($session['ip_address'] ?? '—') ?></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:1px">
+              Actif <?= htmlspecialchars(date('H:i', strtotime($session['last_activity']))) ?>
+            </div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </div>
 
   <?php if ($success): ?><div class="msg ok"><?= htmlspecialchars($success) ?></div><?php endif; ?>
   <?php if ($error): ?><div class="msg err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
@@ -240,5 +285,9 @@ input:focus{outline:none;border-color:var(--accent)}
   </div>
 </div>
 <?php render_confirm_ui($t); ?>
+<script>
+// Auto-refresh de la liste des utilisateurs connectés toutes les 60s
+setTimeout(function() { window.location.reload(); }, 60000);
+</script>
 </body>
 </html>
