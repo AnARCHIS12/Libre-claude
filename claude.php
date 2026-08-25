@@ -75,7 +75,7 @@ class ClaudeClient {
                 libreclaude_log("API key[$this->currentKeyIndex] error: $msg", 2);
 
                 // Rotation si rate limit ou clé invalide
-                if (strpos($msg, '429') !== false || strpos($msg, '401') !== false) {
+                if (strpos($msg, '429') !== false || strpos($msg, '401') !== false || strpos($msg, '402') !== false) {
                     $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
                 }
             }
@@ -106,7 +106,7 @@ class ClaudeClient {
                 $msg = $e->getMessage();
                 libreclaude_log("Transcription key[$this->currentKeyIndex] error: $msg", 2);
 
-                if (strpos($msg, '429') !== false || strpos($msg, '401') !== false) {
+                if (strpos($msg, '429') !== false || strpos($msg, '401') !== false || strpos($msg, '402') !== false) {
                     $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
                 }
             }
@@ -139,7 +139,7 @@ class ClaudeClient {
                 $lastError = $e->getMessage();
                 libreclaude_log("Web search key[$this->currentKeyIndex] error: $lastError", 2);
 
-                if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false) {
+                if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false || strpos($lastError, '402') !== false) {
                     $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
                 }
             }
@@ -176,7 +176,7 @@ class ClaudeClient {
                 $lastError = $msg;
                 libreclaude_log("Speech key[$this->currentKeyIndex] error: $msg", 2);
 
-                if (strpos($msg, '429') !== false || strpos($msg, '401') !== false) {
+                if (strpos($msg, '429') !== false || strpos($msg, '401') !== false || strpos($msg, '402') !== false) {
                     $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
                 }
             }
@@ -218,7 +218,7 @@ class ClaudeClient {
                 $lastError = $e->getMessage();
                 libreclaude_log("OCR key[$this->currentKeyIndex] error: $lastError", 2);
 
-                if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false) {
+                if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false || strpos($lastError, '402') !== false) {
                     $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
                 }
             }
@@ -272,7 +272,7 @@ class ClaudeClient {
                 $lastError = $e->getMessage();
                 libreclaude_log("Image generation key[$this->currentKeyIndex] error: $lastError", 2);
 
-                if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false) {
+                if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false || strpos($lastError, '402') !== false) {
                     $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
                 }
             }
