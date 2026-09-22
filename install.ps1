@@ -251,6 +251,8 @@ function Test-DockerDaemon {
 }
 
 function Wait-DockerReady([int]$TimeoutSeconds = 120) {
+    Ensure-Wsl
+
     if (Test-DockerDaemon) {
         return $true
     }
@@ -285,6 +287,7 @@ function Wait-DockerReady([int]$TimeoutSeconds = 120) {
 
 function Get-DockerCommand {
     Ensure-DockerPath
+    Ensure-Wsl
     $docker = Get-Command docker -ErrorAction SilentlyContinue
     if ($docker) { return $docker }
 
@@ -426,26 +429,28 @@ if ((Test-Path $Dir) -and -not (Test-Path $Dir -PathType Container)) {
     Fail "$Dir existe mais n'est pas un dossier."
 }
 
+$writeFiles = $true
 if ((Test-Path (Join-Path $Dir "docker-compose.yml")) -and -not $Yes) {
-    Write-Warn "Installation existante detectee dans $Dir."
-    if (-not (Ask-YesNo "Mettre a jour les fichiers de lancement ?" $true)) {
-        Write-Warn "Aucun changement effectue."
-        exit 0
+    Write-Warn "Installation existante detectee dans $(Format-DisplayPath $Dir)."
+    if (-not (Ask-YesNo "Mettre a jour les fichiers de configuration (.env, docker-compose.yml) ?" $true)) {
+        Write-Info "Conservation des fichiers existants. Poursuite du demarrage..."
+        $writeFiles = $false
     }
 }
 
-New-Item -ItemType Directory -Force -Path $Dir | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $Dir "data") | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $Dir "sandbox") | Out-Null
+if ($writeFiles) {
+    New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $Dir "data") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $Dir "sandbox") | Out-Null
 
-@"
+    @"
 PUBLIC_URL=$PublicUrl
 GITHUB_OAUTH_CLIENT_ID=$GitHubOAuthClientId
 GITHUB_OAUTH_CLIENT_SECRET=$GitHubOAuthClientSecret
 GITHUB_OAUTH_SCOPE=$GitHubOAuthScope
 "@ | Set-Content -Encoding UTF8 -Path (Join-Path $Dir ".env")
 
-@"
+    @"
 services:
   libre-claude:
     image: $Image
@@ -464,11 +469,12 @@ services:
     restart: unless-stopped
 "@ | Set-Content -Encoding UTF8 -Path (Join-Path $Dir "docker-compose.yml")
 
-Write-Ok "Fichiers crees:"
-Write-Host "  $(Format-DisplayPath (Join-Path $Dir "docker-compose.yml"))"
-Write-Host "  $(Format-DisplayPath (Join-Path $Dir ".env"))"
-Write-Host "  $(Format-DisplayPath (Join-Path $Dir "data"))"
-Write-Host "  $(Format-DisplayPath (Join-Path $Dir "sandbox"))"
+    Write-Ok "Fichiers de configuration mis a jour:"
+    Write-Host "  $(Format-DisplayPath (Join-Path $Dir "docker-compose.yml"))"
+    Write-Host "  $(Format-DisplayPath (Join-Path $Dir ".env"))"
+    Write-Host "  $(Format-DisplayPath (Join-Path $Dir "data"))"
+    Write-Host "  $(Format-DisplayPath (Join-Path $Dir "sandbox"))"
+}
 
 if ($NoStart) {
     Write-Host ""
