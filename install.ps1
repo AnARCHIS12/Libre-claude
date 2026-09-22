@@ -60,7 +60,7 @@ function Write-Ok($Message) { Write-Host (Format-DisplayPath $Message) -Foregrou
 function Write-Warn($Message) { Write-Host (Format-DisplayPath $Message) -ForegroundColor Yellow }
 function Fail($Message) {
     Write-Host ("Erreur: " + (Format-DisplayPath $Message)) -ForegroundColor Red
-    exit 1
+    throw ("Erreur: " + (Format-DisplayPath $Message))
 }
 
 function Test-IsAdmin {
@@ -368,85 +368,92 @@ function Get-ComposeCommand {
 }
 
 function Invoke-Compose($Compose, $Arguments) {
-    if ($Compose.Count -eq 2) {
-        & $Compose[0] $Compose[1] @Arguments
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        if ($Compose.Count -eq 2) {
+            & $Compose[0] $Compose[1] @Arguments
+        } else {
+            & $Compose[0] @Arguments
+        }
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    if ($LASTEXITCODE -ne 0) { Fail "Docker Compose a echoue lors de : $($Arguments -join ' ')" }
+}
+
+function Start-Install {
+    Write-Host ""
+    Write-Host "Libre Claude - installation Windows" -ForegroundColor White
+    Write-Host ""
+
+    if (-not $Yes) {
+        Write-Warn "Assistant interactif. Appuyez sur Entree pour garder une valeur par defaut."
+        $Dir = Ask-Value "Dossier d'installation" $Dir
+        $Port = [int](Ask-Value "Port web local" $Port)
+        $Image = Ask-Value "Image Docker" $Image
+        $PublicUrl = Ask-Value "URL publique de l'app" $PublicUrl
+
+        if (Ask-YesNo "Configurer GitHub OAuth maintenant ?" $false) {
+            $GitHubOAuthClientId = Ask-Value "GitHub OAuth Client ID" $GitHubOAuthClientId
+            $GitHubOAuthClientSecret = Ask-SecretValue "GitHub OAuth Client Secret" $GitHubOAuthClientSecret
+        }
+
+        $NoStart = -not (Ask-YesNo "Lancer Libre Claude apres l'installation ?" $true)
     } else {
-        & $Compose[0] @Arguments
-    }
-    if ($LASTEXITCODE -ne 0) { Fail "Docker Compose a echoue: $($Arguments -join ' ')" }
-}
-
-Write-Host ""
-Write-Host "Libre Claude - installation Windows" -ForegroundColor White
-Write-Host ""
-
-if (-not $Yes) {
-    Write-Warn "Assistant interactif. Appuyez sur Entree pour garder une valeur par defaut."
-    $Dir = Ask-Value "Dossier d'installation" $Dir
-    $Port = [int](Ask-Value "Port web local" $Port)
-    $Image = Ask-Value "Image Docker" $Image
-    $PublicUrl = Ask-Value "URL publique de l'app" $PublicUrl
-
-    if (Ask-YesNo "Configurer GitHub OAuth maintenant ?" $false) {
-        $GitHubOAuthClientId = Ask-Value "GitHub OAuth Client ID" $GitHubOAuthClientId
-        $GitHubOAuthClientSecret = Ask-SecretValue "GitHub OAuth Client Secret" $GitHubOAuthClientSecret
+        Write-Warn "Mode non-interactif: utilisation des parametres et variables d'environnement."
     }
 
-    $NoStart = -not (Ask-YesNo "Lancer Libre Claude apres l'installation ?" $true)
-} else {
-    Write-Warn "Mode non-interactif: utilisation des parametres et variables d'environnement."
-}
+    if ($Port -lt 1 -or $Port -gt 65535) { Fail "port invalide: $Port" }
 
-if ($Port -lt 1 -or $Port -gt 65535) { Fail "port invalide: $Port" }
+    $oauthState = if ($GitHubOAuthClientId -and $GitHubOAuthClientSecret) { "active" } else { "desactive" }
+    $startState = if ($NoStart) { "non" } else { "oui" }
 
-$oauthState = if ($GitHubOAuthClientId -and $GitHubOAuthClientSecret) { "active" } else { "desactive" }
-$startState = if ($NoStart) { "non" } else { "oui" }
+    Write-Host ""
+    Write-Host "Configuration:"
+    Write-Host "  Dossier : $(Format-DisplayPath $Dir)"
+    Write-Host "  Port    : $Port"
+    Write-Host "  Image   : $Image"
+    Write-Host "  URL     : $(if ($PublicUrl) { $PublicUrl } else { "auto" })"
+    Write-Host "  OAuth   : $oauthState"
+    Write-Host "  Lancer  : $startState"
 
-Write-Host ""
-Write-Host "Configuration:"
-Write-Host "  Dossier : $(Format-DisplayPath $Dir)"
-Write-Host "  Port    : $Port"
-Write-Host "  Image   : $Image"
-Write-Host "  URL     : $(if ($PublicUrl) { $PublicUrl } else { "auto" })"
-Write-Host "  OAuth   : $oauthState"
-Write-Host "  Lancer  : $startState"
-
-if ($DryRun) {
-    Write-Ok "Dry-run termine. Aucun fichier ecrit."
-    exit 0
-}
-
-if (-not (Ask-YesNo "Continuer ?" $true)) {
-    Write-Warn "Installation annulee."
-    exit 0
-}
-
-if ((Test-Path $Dir) -and -not (Test-Path $Dir -PathType Container)) {
-    Fail "$Dir existe mais n'est pas un dossier."
-}
-
-$writeFiles = $true
-if ((Test-Path (Join-Path $Dir "docker-compose.yml")) -and -not $Yes) {
-    Write-Warn "Installation existante detectee dans $(Format-DisplayPath $Dir)."
-    if (-not (Ask-YesNo "Mettre a jour les fichiers de configuration (.env, docker-compose.yml) ?" $true)) {
-        Write-Info "Conservation des fichiers existants. Poursuite du demarrage..."
-        $writeFiles = $false
+    if ($DryRun) {
+        Write-Ok "Dry-run termine. Aucun fichier ecrit."
+        return
     }
-}
 
-if ($writeFiles) {
-    New-Item -ItemType Directory -Force -Path $Dir | Out-Null
-    New-Item -ItemType Directory -Force -Path (Join-Path $Dir "data") | Out-Null
-    New-Item -ItemType Directory -Force -Path (Join-Path $Dir "sandbox") | Out-Null
+    if (-not (Ask-YesNo "Continuer ?" $true)) {
+        Write-Warn "Installation annulee."
+        return
+    }
 
-    @"
+    if ((Test-Path $Dir) -and -not (Test-Path $Dir -PathType Container)) {
+        Fail "$Dir existe mais n'est pas un dossier."
+    }
+
+    $writeFiles = $true
+    if ((Test-Path (Join-Path $Dir "docker-compose.yml")) -and -not $Yes) {
+        Write-Warn "Installation existante detectee dans $(Format-DisplayPath $Dir)."
+        if (-not (Ask-YesNo "Mettre a jour les fichiers de configuration (.env, docker-compose.yml) ?" $true)) {
+            Write-Info "Conservation des fichiers existants. Poursuite du demarrage..."
+            $writeFiles = $false
+        }
+    }
+
+    if ($writeFiles) {
+        New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+        New-Item -ItemType Directory -Force -Path (Join-Path $Dir "data") | Out-Null
+        New-Item -ItemType Directory -Force -Path (Join-Path $Dir "sandbox") | Out-Null
+
+        @"
 PUBLIC_URL=$PublicUrl
 GITHUB_OAUTH_CLIENT_ID=$GitHubOAuthClientId
 GITHUB_OAUTH_CLIENT_SECRET=$GitHubOAuthClientSecret
 GITHUB_OAUTH_SCOPE=$GitHubOAuthScope
 "@ | Set-Content -Encoding UTF8 -Path (Join-Path $Dir ".env")
 
-    @"
+        @"
 services:
   libre-claude:
     image: $Image
@@ -465,66 +472,81 @@ services:
     restart: unless-stopped
 "@ | Set-Content -Encoding UTF8 -Path (Join-Path $Dir "docker-compose.yml")
 
-    Write-Ok "Fichiers de configuration mis a jour:"
-    Write-Host "  $(Format-DisplayPath (Join-Path $Dir "docker-compose.yml"))"
-    Write-Host "  $(Format-DisplayPath (Join-Path $Dir ".env"))"
-    Write-Host "  $(Format-DisplayPath (Join-Path $Dir "data"))"
-    Write-Host "  $(Format-DisplayPath (Join-Path $Dir "sandbox"))"
-}
+        Write-Ok "Fichiers de configuration mis a jour:"
+        Write-Host "  $(Format-DisplayPath (Join-Path $Dir "docker-compose.yml"))"
+        Write-Host "  $(Format-DisplayPath (Join-Path $Dir ".env"))"
+        Write-Host "  $(Format-DisplayPath (Join-Path $Dir "data"))"
+        Write-Host "  $(Format-DisplayPath (Join-Path $Dir "sandbox"))"
+    }
 
-if ($NoStart) {
+    if ($NoStart) {
+        Write-Host ""
+        Write-Host "Installation preparee sans lancement."
+        Write-Host ""
+        Write-Host "Pour demarrer:"
+        Write-Host "  cd `"$(Format-DisplayPath $Dir)`""
+        Write-Host "  docker compose up -d"
+        return
+    }
+
+    $compose = Get-ComposeCommand
+
+    # Attente active et intelligente du demarrage complet de Docker
+    if (-not (Wait-DockerReady -TimeoutSeconds 120)) {
+        Write-Host ""
+        Write-Host "Le moteur Docker ne repond pas encore." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Conseils pour resoudre ce probleme :" -ForegroundColor Cyan
+        if (-not (Test-WslInstalled)) {
+            Write-Host "  - WSL 2 n'a pas pu etre detecte comme operationnel." -ForegroundColor Red
+            Write-Host "    Ouvrez PowerShell en tant qu'Administrateur et lancez : wsl --install --no-distribution" -ForegroundColor White
+            Write-Host "    Puis REDEMARREZ votre ordinateur pour activer la virtualisation." -ForegroundColor White
+        } else {
+            Write-Host "  1. Regardez dans la barre des taches (pres de l'horloge) si l'icone Docker Desktop apparait."
+            Write-Host "  2. Si Docker Desktop affiche une fenetre, acceptez le contrat de licence (bouton Accept)."
+            Write-Host "  3. Si WSL ou Docker Desktop vient d'etre installe pour la 1ere fois, REDEMARREZ votre PC."
+            Write-Host "  4. Une fois l'icone Docker verte ('Engine running'), relancez simplement :"
+            Write-Host "     irm `"https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.ps1?v=`$(Get-Random)`" | iex" -ForegroundColor Green
+        }
+        Write-Host ""
+        Fail "Docker Desktop n'est pas encore pret. Suivez les instructions ci-dessus."
+    }
+
+    Push-Location $Dir
+    try {
+        Write-Info "Telechargement de l'image (cela peut prendre quelques minutes)..."
+        Invoke-Compose $compose @("pull")
+
+        Write-Info "Demarrage de Libre Claude..."
+        Invoke-Compose $compose @("up", "-d")
+    } finally {
+        Pop-Location
+    }
+
     Write-Host ""
-    Write-Host "Installation preparee sans lancement."
+    Write-Ok "Libre Claude est installe et demarre !"
     Write-Host ""
-    Write-Host "Pour demarrer:"
+    Write-Host "Ouvrir dans votre navigateur:" -ForegroundColor Cyan
+    Write-Host "  http://127.0.0.1:$Port" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Commandes utiles:"
     Write-Host "  cd `"$(Format-DisplayPath $Dir)`""
-    Write-Host "  docker compose up -d"
-    exit 0
+    Write-Host "  docker compose ps"
+    Write-Host "  docker compose logs -f"
+    Write-Host "  docker compose pull; docker compose up -d"
+    Write-Host "  docker compose down"
+
+    try {
+        Start-Process "http://127.0.0.1:$Port"
+    } catch {}
 }
 
-$compose = Get-ComposeCommand
-
-# Attente active et intelligente du demarrage complet de Docker
-if (-not (Wait-DockerReady -TimeoutSeconds 120)) {
-    Write-Host ""
-    Write-Host "Le moteur Docker ne repond pas encore." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Conseils pour resoudre ce probleme :" -ForegroundColor Cyan
-    if (-not (Test-WslInstalled)) {
-        Write-Host "  - WSL 2 n'a pas pu etre detecte comme operationnel." -ForegroundColor Red
-        Write-Host "    Ouvrez PowerShell en tant qu'Administrateur et lancez : wsl --install --no-distribution" -ForegroundColor White
-        Write-Host "    Puis REDEMARREZ votre ordinateur pour activer la virtualisation." -ForegroundColor White
-    } else {
-        Write-Host "  1. Regardez dans la barre des taches (pres de l'horloge) si l'icone Docker Desktop apparait."
-        Write-Host "  2. Si Docker Desktop affiche une fenetre, acceptez le contrat de licence (bouton Accept)."
-        Write-Host "  3. Si WSL ou Docker Desktop vient d'etre installe pour la 1ere fois, REDEMARREZ votre PC."
-        Write-Host "  4. Une fois l'icone Docker verte ('Engine running'), relancez simplement :"
-        Write-Host "     irm `"https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.ps1?v=`$(Get-Random)`" | iex" -ForegroundColor Green
+try {
+    Start-Install
+} catch {
+    if ($_ -notmatch "^Erreur:") {
+        Write-Host ("Erreur: " + (Format-DisplayPath $_.Exception.Message)) -ForegroundColor Red
     }
     Write-Host ""
-    Fail "Docker Desktop n'est pas encore pret. Suivez les instructions ci-dessus."
+    Write-Host "L'installation a ete interrompue." -ForegroundColor Yellow
 }
-
-Push-Location $Dir
-try {
-    Write-Info "Telechargement de l'image..."
-    Invoke-Compose $compose @("pull")
-
-    Write-Info "Demarrage de Libre Claude..."
-    Invoke-Compose $compose @("up", "-d")
-} finally {
-    Pop-Location
-}
-
-Write-Host ""
-Write-Ok "Libre Claude est installe."
-Write-Host ""
-Write-Host "Ouvrir:"
-Write-Host "  http://127.0.0.1:$Port"
-Write-Host ""
-Write-Host "Commandes utiles:"
-Write-Host "  cd `"$(Format-DisplayPath $Dir)`""
-Write-Host "  docker compose ps"
-Write-Host "  docker compose logs -f"
-Write-Host "  docker compose pull; docker compose up -d"
-Write-Host "  docker compose down"
