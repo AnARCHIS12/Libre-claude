@@ -213,7 +213,7 @@ Lancer Libre Claude après l'installation ? [O/n]
 Continuer ? [O/n]
 ```
 
-Si Docker Desktop est absent, le script peut l'installer avec `winget`, ajouter Docker au `PATH` utilisateur, puis lancer Docker Desktop.
+Si Docker Desktop ou WSL sont absents, le script configure automatiquement WSL 2, installe Docker Desktop avec `winget`, configure le `PATH`, attend que le moteur Docker soit prêt et démarre l'application.
 
 Avec options, téléchargez puis lancez le script :
 
