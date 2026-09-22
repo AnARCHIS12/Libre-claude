@@ -83,30 +83,59 @@ function Test-VirtualizationEnabled {
     return $true
 }
 
+function Invoke-NativeCommandTimeout([string]$Command, [string]$Arguments = "", [int]$TimeoutSeconds = 5) {
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $Command
+        $psi.Arguments = $Arguments
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+
+        $proc = [System.Diagnostics.Process]::Start($psi)
+        if ($null -eq $proc) { return $false }
+
+        $exited = $proc.WaitForExit($TimeoutSeconds * 1000)
+        if ($exited) {
+            $code = $proc.ExitCode
+            $proc.Dispose()
+            return ($code -eq 0)
+        } else {
+            try { $proc.Kill() } catch {}
+            $proc.Dispose()
+            return $false
+        }
+    } catch {
+        return $false
+    }
+}
+
 function Test-WslInstalled {
     $wslExe = Get-Command wsl.exe -ErrorAction SilentlyContinue
     if (-not $wslExe) { return $false }
 
-    $prev = $ErrorActionPreference
-    $ErrorActionPreference = 'SilentlyContinue'
-    try {
-        & wsl.exe --status 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) { return $true }
+    # Test avec timeout de 5s pour eviter les freezes connus de wsl.exe
+    if (Invoke-NativeCommandTimeout "wsl.exe" "--status" 5) { return $true }
+    if (Invoke-NativeCommandTimeout "wsl.exe" "-l -q" 5) { return $true }
 
-        & wsl.exe -l -q 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) { return $true }
-
-        return $false
-    } catch {
-        return $false
-    } finally {
-        $ErrorActionPreference = $prev
-    }
+    return $false
 }
 
 function Ensure-Wsl {
+    Write-Info "Verification de Windows Subsystem for Linux (WSL 2)..."
     if (Test-WslInstalled) {
         Write-Ok "WSL (Windows Subsystem for Linux) est deja configure."
+        return $true
+    }
+
+    # Debloquer d'eventuels processus WSL figes
+    try {
+        Stop-Process -Name "wslservice", "wsl", "wslhost" -Force -ErrorAction SilentlyContinue
+    } catch {}
+
+    if (Test-WslInstalled) {
+        Write-Ok "WSL est operationnel apres reinitialisation."
         return $true
     }
 
@@ -115,7 +144,7 @@ function Ensure-Wsl {
         Write-Warn "Si WSL ou Docker ne demarre pas, activez la virtualisation dans les parametres BIOS de votre carte mere."
     }
 
-    Write-Warn "WSL (Windows Subsystem for Linux) n'est pas detecte."
+    Write-Warn "WSL (Windows Subsystem for Linux) n'est pas actif."
     Write-Info "Docker Desktop sous Windows necessite WSL 2 pour fonctionner."
     Write-Info "Installation automatique de WSL 2 en cours..."
 
@@ -126,13 +155,9 @@ function Ensure-Wsl {
         try {
             if (Test-IsAdmin) {
                 Write-Info "Execution de : wsl --install --no-distribution"
-                $prev = $ErrorActionPreference
-                $ErrorActionPreference = 'SilentlyContinue'
-                & wsl.exe --install --no-distribution 2>&1 | Out-Null
-                if ($LASTEXITCODE -eq 0) { $installed = $true }
-                $ErrorActionPreference = $prev
+                $installed = Invoke-NativeCommandTimeout "wsl.exe" "--install --no-distribution" 60
             } else {
-                Write-Info "Une confirmation Administrateur (UAC) Windows va s'ouvrir pour installer WSL. Cliquez sur 'Oui'."
+                Write-Warn "Une confirmation Administrateur (UAC) Windows peut apparaitre. Cliquez sur 'Oui'."
                 $p = Start-Process -FilePath "wsl.exe" -ArgumentList "--install", "--no-distribution" -Verb RunAs -Wait -PassThru -ErrorAction SilentlyContinue
                 if ($p -and $p.ExitCode -eq 0) { $installed = $true }
             }
@@ -145,22 +170,14 @@ function Ensure-Wsl {
         $winget = Get-Command winget -ErrorAction SilentlyContinue
         if ($winget) {
             Write-Info "Installation du package WSL via winget (Microsoft.WSL)..."
-            $prev = $ErrorActionPreference
-            $ErrorActionPreference = 'SilentlyContinue'
-            & winget install --id Microsoft.WSL -e --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) { $installed = $true }
-            $ErrorActionPreference = $prev
+            $installed = Invoke-NativeCommandTimeout "winget.exe" "install --id Microsoft.WSL -e --accept-package-agreements --accept-source-agreements" 90
         }
     }
 
     # Mise a jour du noyau Linux WSL
     if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
-        $prev = $ErrorActionPreference
-        $ErrorActionPreference = 'SilentlyContinue'
-        try {
-            & wsl.exe --update 2>&1 | Out-Null
-        } catch {}
-        finally { $ErrorActionPreference = $prev }
+        Write-Info "Mise a jour du noyau WSL Linux..."
+        Invoke-NativeCommandTimeout "wsl.exe" "--update" 30 | Out-Null
     }
 
     if (Test-WslInstalled) {
@@ -238,21 +255,10 @@ function Install-DockerDesktop {
 }
 
 function Test-DockerDaemon {
-    $prev = $ErrorActionPreference
-    $ErrorActionPreference = 'SilentlyContinue'
-    try {
-        & docker info 2>&1 | Out-Null
-        return ($LASTEXITCODE -eq 0)
-    } catch {
-        return $false
-    } finally {
-        $ErrorActionPreference = $prev
-    }
+    return (Invoke-NativeCommandTimeout "docker.exe" "info" 5)
 }
 
 function Wait-DockerReady([int]$TimeoutSeconds = 120) {
-    Ensure-Wsl
-
     if (Test-DockerDaemon) {
         return $true
     }
@@ -349,20 +355,10 @@ function Ask-YesNo($Prompt, $DefaultYes) {
 }
 
 function Get-ComposeCommand {
+    Write-Info "Verification des outils Docker et WSL..."
     Get-DockerCommand | Out-Null
 
-    $hasCompose = $false
-    $prev = $ErrorActionPreference
-    $ErrorActionPreference = 'SilentlyContinue'
-    try {
-        & docker compose version 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) { $hasCompose = $true }
-    } catch {
-        $hasCompose = $false
-    } finally {
-        $ErrorActionPreference = $prev
-    }
-
+    $hasCompose = Invoke-NativeCommandTimeout "docker.exe" "compose version" 5
     if ($hasCompose) { return @("docker", "compose") }
 
     $dockerCompose = Get-Command docker-compose -ErrorAction SilentlyContinue
