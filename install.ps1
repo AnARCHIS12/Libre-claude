@@ -210,8 +210,10 @@ function Ensure-DockerPath {
     $candidates = @(
         "$env:ProgramFiles\Docker\Docker\resources\bin",
         "$env:ProgramFiles\Docker\Docker\resources",
+        "$env:ProgramFiles\Docker\Docker",
         "$env:ProgramData\DockerDesktop\version-bin",
-        "$env:LOCALAPPDATA\Docker\resources\bin"
+        "$env:LOCALAPPDATA\Docker\resources\bin",
+        "$env:LOCALAPPDATA\Docker\resources"
     )
     foreach ($candidate in $candidates) {
         if (Test-Path (Join-Path $candidate "docker.exe")) {
@@ -349,9 +351,15 @@ function ConvertFrom-SecureStringPlain($SecureString) {
 function Ask-YesNo($Prompt, $DefaultYes) {
     if ($Yes) { return $DefaultYes }
     $suffix = if ($DefaultYes) { "[O/n]" } else { "[o/N]" }
-    $answer = Read-Host "$Prompt $suffix"
+    $raw = Read-Host "$Prompt $suffix"
+    $answer = if ($raw) { $raw.Trim() } else { "" }
     if ([string]::IsNullOrWhiteSpace($answer)) { return $DefaultYes }
-    return $answer -match "^(o|oui|y|yes)$"
+
+    if ($DefaultYes) {
+        return ($answer -notmatch "^(n|no|non)$")
+    } else {
+        return ($answer -match "^(o|oui|y|yes)$")
+    }
 }
 
 function Get-ComposeCommand {
