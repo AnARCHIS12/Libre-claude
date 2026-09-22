@@ -14,11 +14,33 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Write-Info($Message) { Write-Host $Message -ForegroundColor Cyan }
-function Write-Ok($Message) { Write-Host $Message -ForegroundColor Green }
-function Write-Warn($Message) { Write-Host $Message -ForegroundColor Yellow }
+function Format-DisplayPath($Path) {
+    if (-not $Path) { return "" }
+    $p = "$Path"
+    if ($env:USERPROFILE) {
+        $p = $p -replace [regex]::Escape($env:USERPROFILE), '~'
+    }
+    if ($HOME -and $HOME -ne $env:USERPROFILE) {
+        $p = $p -replace [regex]::Escape($HOME), '~'
+    }
+    return $p
+}
+
+function Resolve-InputPath($Path) {
+    if (-not $Path) { return $Path }
+    $p = "$Path"
+    if ($p.StartsWith("~")) {
+        $base = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+        return (Join-Path $base $p.Substring(1).TrimStart("\", "/"))
+    }
+    return $p
+}
+
+function Write-Info($Message) { Write-Host (Format-DisplayPath $Message) -ForegroundColor Cyan }
+function Write-Ok($Message) { Write-Host (Format-DisplayPath $Message) -ForegroundColor Green }
+function Write-Warn($Message) { Write-Host (Format-DisplayPath $Message) -ForegroundColor Yellow }
 function Fail($Message) {
-    Write-Host "Erreur: $Message" -ForegroundColor Red
+    Write-Host ("Erreur: " + (Format-DisplayPath $Message)) -ForegroundColor Red
     exit 1
 }
 
@@ -268,9 +290,10 @@ function Get-DockerCommand {
 
 function Ask-Value($Prompt, $Default) {
     if ($Yes) { return $Default }
-    $value = Read-Host "$Prompt [$Default]"
+    $displayDefault = Format-DisplayPath $Default
+    $value = Read-Host "$Prompt [$displayDefault]"
     if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
-    return $value
+    return (Resolve-InputPath $value)
 }
 
 function Ask-SecretValue($Prompt, $Default) {
@@ -363,7 +386,7 @@ $startState = if ($NoStart) { "non" } else { "oui" }
 
 Write-Host ""
 Write-Host "Configuration:"
-Write-Host "  Dossier : $Dir"
+Write-Host "  Dossier : $(Format-DisplayPath $Dir)"
 Write-Host "  Port    : $Port"
 Write-Host "  Image   : $Image"
 Write-Host "  URL     : $(if ($PublicUrl) { $PublicUrl } else { "auto" })"
@@ -423,17 +446,17 @@ services:
 "@ | Set-Content -Encoding UTF8 -Path (Join-Path $Dir "docker-compose.yml")
 
 Write-Ok "Fichiers crees:"
-Write-Host "  $(Join-Path $Dir "docker-compose.yml")"
-Write-Host "  $(Join-Path $Dir ".env")"
-Write-Host "  $(Join-Path $Dir "data")"
-Write-Host "  $(Join-Path $Dir "sandbox")"
+Write-Host "  $(Format-DisplayPath (Join-Path $Dir "docker-compose.yml"))"
+Write-Host "  $(Format-DisplayPath (Join-Path $Dir ".env"))"
+Write-Host "  $(Format-DisplayPath (Join-Path $Dir "data"))"
+Write-Host "  $(Format-DisplayPath (Join-Path $Dir "sandbox"))"
 
 if ($NoStart) {
     Write-Host ""
     Write-Host "Installation preparee sans lancement."
     Write-Host ""
     Write-Host "Pour demarrer:"
-    Write-Host "  cd `"$Dir`""
+    Write-Host "  cd `"$(Format-DisplayPath $Dir)`""
     Write-Host "  docker compose up -d"
     exit 0
 }
@@ -479,7 +502,7 @@ Write-Host "Ouvrir:"
 Write-Host "  http://127.0.0.1:$Port"
 Write-Host ""
 Write-Host "Commandes utiles:"
-Write-Host "  cd `"$Dir`""
+Write-Host "  cd `"$(Format-DisplayPath $Dir)`""
 Write-Host "  docker compose ps"
 Write-Host "  docker compose logs -f"
 Write-Host "  docker compose pull; docker compose up -d"

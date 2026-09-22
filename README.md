@@ -205,7 +205,7 @@ irm https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.ps1 |
 Le script demande :
 
 ```text
-Dossier d'installation [C:\Users\vous\libre-claude]
+Dossier d'installation [~\libre-claude]
 Port web local [8173]
 Image Docker [liberchat/libre-claude:latest]
 Configurer GitHub OAuth maintenant ? [o/N]
