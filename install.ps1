@@ -17,12 +17,25 @@ $ErrorActionPreference = "Stop"
 function Format-DisplayPath($Path) {
     if (-not $Path) { return "" }
     $p = "$Path"
-    if ($env:USERPROFILE) {
-        $p = $p -replace [regex]::Escape($env:USERPROFILE), '~'
+
+    # Regex universelle insensible a la casse pour tout chemin C:\Users\<nom> ou C:/Users/<nom>
+    $p = $p -replace '(?i)^[a-z]:[\\/]users[\\/][^\\/]+', '~'
+
+    # Remplacement base sur USERPROFILE, HOME et profil Windows
+    $userDirs = @(
+        $env:USERPROFILE,
+        $HOME,
+        [Environment]::GetFolderPath("UserProfile")
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    foreach ($u in $userDirs) {
+        $cleanU = $u.TrimEnd('\', '/')
+        if ($cleanU) {
+            $p = $p -replace [regex]::Escape($cleanU), '~'
+            $p = $p -replace [regex]::Escape($cleanU.Replace('\', '/')), '~'
+        }
     }
-    if ($HOME -and $HOME -ne $env:USERPROFILE) {
-        $p = $p -replace [regex]::Escape($HOME), '~'
-    }
+
     return $p
 }
 
@@ -31,7 +44,13 @@ function Resolve-InputPath($Path) {
     $p = "$Path"
     if ($p.StartsWith("~")) {
         $base = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
-        return (Join-Path $base $p.Substring(1).TrimStart("\", "/"))
+        if (-not $base) { $base = [Environment]::GetFolderPath("UserProfile") }
+        $rest = $p.Substring(1).TrimStart("\", "/")
+        if ($rest) {
+            return (Join-Path $base $rest)
+        } else {
+            return $base
+        }
     }
     return $p
 }
@@ -478,7 +497,7 @@ if (-not (Wait-DockerReady -TimeoutSeconds 120)) {
         Write-Host "  2. Si Docker Desktop affiche une fenetre, acceptez le contrat de licence (bouton Accept)."
         Write-Host "  3. Si WSL ou Docker Desktop vient d'etre installe pour la 1ere fois, REDEMARREZ votre PC."
         Write-Host "  4. Une fois l'icone Docker verte ('Engine running'), relancez simplement :"
-        Write-Host "     irm https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.ps1 | iex" -ForegroundColor Green
+        Write-Host "     irm `"https://raw.githubusercontent.com/AnARCHIS12/Libre-claude/main/install.ps1?v=`$(Get-Random)`" | iex" -ForegroundColor Green
     }
     Write-Host ""
     Fail "Docker Desktop n'est pas encore pret. Suivez les instructions ci-dessus."
