@@ -42,7 +42,7 @@ class ClaudeClient {
         return DEFAULT_MISTRAL_API_KEYS;
     }
 
-    public function chat($messages, $model = 'mistral-large-2512', $options = []) {
+    public function chat($messages, $model = 'codestral-latest', $options = []) {
         $params = array_merge([
             'temperature' => 0.7,
             'max_tokens'  => 4096,
@@ -126,7 +126,11 @@ class ClaudeClient {
         return ['success' => false, 'error' => 'La dictée vocale a échoué. Vérifiez vos clés Claude.'];
     }
 
-    public function chatWithWebSearch($messages, $model = 'mistral-large-2512', $options = []) {
+    public function chatWithWebSearch($messages, $model = 'mistral-small-latest', $options = []) {
+        if (!in_array($model, ['mistral-small-latest', 'mistral-medium-latest', 'mistral-large-latest', 'mistral-small-2603', 'mistral-medium-2604'])) {
+            $model = 'mistral-small-latest';
+        }
+
         $maxTries = count($this->apiKeys) * 2;
         $lastError = '';
 

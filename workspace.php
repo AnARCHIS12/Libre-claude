@@ -369,7 +369,7 @@ function workspace_ai_code($instruction, $contextFiles, $repoFiles, $user, &$raw
     $result = $client->chat([
         ['role' => 'system', 'content' => $system],
         ['role' => 'user', 'content' => $userPrompt],
-    ], defined('MASTER_AGENT_MODEL') ? MASTER_AGENT_MODEL : 'mistral-large-2512', [
+    ], defined('MASTER_AGENT_MODEL') ? MASTER_AGENT_MODEL : 'codestral-latest', [
         'temperature' => 0.25,
         'max_tokens' => 8192,
     ]);
