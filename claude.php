@@ -628,22 +628,31 @@ class ClaudeClient {
         }
 
         $isImage = strpos($mimeType, 'image/') === 0;
-        $field = $isImage ? 'image_url' : 'document_url';
-        $payload = [
-            'model' => MISTRAL_OCR_MODEL,
-            'document' => [
-                'type' => $field,
-                $field => 'data:' . $mimeType . ';base64,' . base64_encode($bytes),
-            ],
-            'include_image_base64' => false,
-        ];
+        $dataUri = 'data:' . $mimeType . ';base64,' . base64_encode($bytes);
 
-        try {
-            return $this->postJson($apiKey, MISTRAL_OCR_ENDPOINT, $payload, 120);
-        } catch (Exception $e) {
-            $payload['document'][$field] = ['url' => 'data:' . $mimeType . ';base64,' . base64_encode($bytes)];
-            return $this->postJson($apiKey, MISTRAL_OCR_ENDPOINT, $payload, 120);
+        if ($isImage) {
+            // Format image
+            $payload = [
+                'model'    => MISTRAL_OCR_MODEL,
+                'document' => [
+                    'type'      => 'image_url',
+                    'image_url' => $dataUri,
+                ],
+                'include_image_base64' => false,
+            ];
+        } else {
+            // Format document (PDF etc.)
+            $payload = [
+                'model'    => MISTRAL_OCR_MODEL,
+                'document' => [
+                    'type'         => 'document_url',
+                    'document_url' => $dataUri,
+                ],
+                'include_image_base64' => false,
+            ];
         }
+
+        return $this->postJson($apiKey, MISTRAL_OCR_ENDPOINT, $payload, 120);
     }
 
     private function createImageAgent($apiKey) {
