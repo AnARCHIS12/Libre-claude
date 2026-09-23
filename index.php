@@ -1505,7 +1505,7 @@ body {
           <?php endforeach; ?>
         </select>
         <button type="button" class="model-picker-btn" id="model-picker-btn" onclick="toggleModelMenu()" aria-haspopup="listbox" aria-expanded="false">
-          <span id="model-picker-label"><?= htmlspecialchars($modelNames[$defaultModel] ?? 'Claude 3.7 Sonnet') ?></span>
+          <span id="model-picker-label"><?= htmlspecialchars($modelNames[$defaultModel] ?? 'Claude Sonnet 5') ?></span>
           <i class="fa-solid fa-chevron-down"></i>
         </button>
         <div class="model-menu" id="model-menu" role="listbox" aria-label="<?= htmlspecialchars($t('choose_model')) ?>">

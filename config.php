@@ -51,22 +51,22 @@ define('GITHUB_OAUTH_CLIENT_ID', libreclaude_env('GITHUB_OAUTH_CLIENT_ID', ''));
 define('GITHUB_OAUTH_CLIENT_SECRET', libreclaude_env('GITHUB_OAUTH_CLIENT_SECRET', ''));
 define('GITHUB_OAUTH_SCOPE', trim(libreclaude_env('GITHUB_OAUTH_SCOPE', '')));
 
-// Modèles organisés par catégorie (alignés sur les modèles Claude récents et 100% fonctionnels en gratuit)
+// Modèles organisés par catégorie (alignés sur la génération Claude 5 / 4.5 et 100% fonctionnels en gratuit)
 define('MISTRAL_MODELS', [
     'flagship' => [
-        ['id' => 'codestral-latest', 'name' => 'Claude 3.7 Sonnet', 'desc' => 'Raisonnement hybride, logique complexe, code — Gratuit'],
-        ['id' => 'ministral-14b-latest', 'name' => 'Claude 3.5 Sonnet', 'desc' => 'Multimodal 14B, vision, analyse documents — Gratuit'],
-        ['id' => 'ministral-8b-latest', 'name' => 'Claude 3.5 Haiku', 'desc' => 'Ultra rapide, multitâche, vision — Gratuit'],
-        ['id' => 'ministral-3b-latest', 'name' => 'Claude 3 Haiku', 'desc' => 'Modèle compact ultra-léger — Gratuit'],
+        ['id' => 'codestral-latest', 'name' => 'Claude Sonnet 5', 'desc' => 'Raisonnement avancé, logique complexe, code — Gratuit'],
+        ['id' => 'ministral-14b-latest', 'name' => 'Claude Sonnet 4.5', 'desc' => 'Multimodal 14B, vision, analyse documents — Gratuit'],
+        ['id' => 'ministral-8b-latest', 'name' => 'Claude Haiku 4.5', 'desc' => 'Ultra rapide, multitâche, vision — Gratuit'],
+        ['id' => 'ministral-3b-latest', 'name' => 'Claude Haiku Mini', 'desc' => 'Modèle compact ultra-léger — Gratuit'],
     ],
     'code' => [
-        ['id' => 'codestral-2508', 'name' => 'Claude Code', 'desc' => 'Assistant développeur, refactoring, FIM — Gratuit'],
+        ['id' => 'codestral-2508', 'name' => 'Claude Code Max', 'desc' => 'Assistant développeur, refactoring, FIM — Gratuit'],
         ['id' => 'mistral-code-latest', 'name' => 'Claude Code Sonnet', 'desc' => 'Débogage, architecture logicielle — Gratuit'],
         ['id' => 'mistral-code-fim-latest', 'name' => 'Claude Code Haiku', 'desc' => 'Tests unitaires, CI/CD temps réel — Gratuit'],
     ],
     'vision' => [
-        ['id' => 'ministral-14b-2512', 'name' => 'Claude Vision Sonnet', 'desc' => 'Analyse d\'images, plans, diagrammes 14B — Gratuit'],
-        ['id' => 'ministral-8b-2512', 'name' => 'Claude Vision Haiku', 'desc' => 'OCR rapide, détection d\'objets 8B — Gratuit'],
+        ['id' => 'ministral-14b-2512', 'name' => 'Claude Vision 5', 'desc' => 'Analyse d\'images, plans, diagrammes 14B — Gratuit'],
+        ['id' => 'ministral-8b-2512', 'name' => 'Claude Vision Lite', 'desc' => 'OCR rapide, détection d\'objets 8B — Gratuit'],
     ],
     'audio' => [
         ['id' => 'voxtral-small-latest', 'name' => 'Claude Audio Haiku', 'desc' => 'Analyse sémantique audio — Gratuit'],
@@ -75,18 +75,27 @@ define('MISTRAL_MODELS', [
 ]);
 
 define('MODEL_ALIASES', [
-    // Nouveaux modèles actuels
+    // Génération actuelle Claude 5 / 4.5
+    'claude-sonnet-5'        => 'codestral-latest',
+    'claude-sonnet-4.5'      => 'ministral-14b-latest',
+    'claude-haiku-4.5'       => 'ministral-8b-latest',
+    'claude-haiku-mini'      => 'ministral-3b-latest',
+    'claude-code-max'        => 'codestral-2508',
+    'claude-code-sonnet'     => 'mistral-code-latest',
+    'claude-code-haiku'      => 'mistral-code-fim-latest',
+    'claude-vision-5'        => 'ministral-14b-2512',
+    'claude-vision-lite'     => 'ministral-8b-2512',
+    'claude-audio-haiku'     => 'voxtral-small-latest',
+    'claude-audio-mini'      => 'voxtral-small-2507',
+
+    // Alias Claude 3.x / 4.x
     'claude-3.7-sonnet'      => 'codestral-latest',
     'claude-3.5-sonnet'      => 'ministral-14b-latest',
     'claude-3.5-haiku'       => 'ministral-8b-latest',
     'claude-3-haiku'         => 'ministral-3b-latest',
     'claude-code'            => 'codestral-2508',
-    'claude-code-sonnet'     => 'mistral-code-latest',
-    'claude-code-haiku'      => 'mistral-code-fim-latest',
     'claude-vision-sonnet'   => 'ministral-14b-2512',
     'claude-vision-haiku'    => 'ministral-8b-2512',
-    'claude-audio-haiku'     => 'voxtral-small-latest',
-    'claude-audio-mini'      => 'voxtral-small-2507',
 
     // Redirections transparentes des anciens modèles Opus (pour éviter toute erreur 403)
     'claude-opus-4.6'        => 'codestral-latest',
