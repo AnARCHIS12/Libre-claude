@@ -3,6 +3,7 @@ FROM php:8.3-apache
 # Cacher la version de PHP et les détails d'Apache pour la sécurité
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && sed -i 's/expose_php = On/expose_php = Off/g' "$PHP_INI_DIR/php.ini" \
+    && sed -i 's/^disable_functions\s*=.*/disable_functions =/' "$PHP_INI_DIR/php.ini" \
     && echo "ServerTokens ProductOnly" >> /etc/apache2/apache2.conf \
     && echo "ServerSignature Off" >> /etc/apache2/apache2.conf
 
@@ -11,6 +12,7 @@ RUN apt-get update \
         libcurl4-openssl-dev \
         libsqlite3-dev \
         ca-certificates \
+        poppler-utils \
     && docker-php-ext-install curl pdo pdo_sqlite \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
