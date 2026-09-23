@@ -2836,10 +2836,19 @@ function renderMarkdown(text) {
     return `\n\n@@CODE_BLOCK_${index}@@\n\n`;
   });
 
-  // Escape HTML first
+  // Extraire les images markdown AVANT l'escape HTML (sinon l'URL serait encodée)
+  const imageBlocks = [];
+  normalized = normalized.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
+    const safeSrc = src.startsWith('/data/') || src.startsWith('data:image/') ? src : '';
+    if (!safeSrc) return '[image]';
+    const index = imageBlocks.push({ alt: alt || 'Image générée', src: safeSrc }) - 1;
+    return `@@IMAGE_BLOCK_${index}@@`;
+  });
+
+  // Escape HTML
   let html = escHtml(normalized);
 
-  // Inline code `...`
+  // Inline code
   html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
 
   // Headers
@@ -2868,14 +2877,22 @@ function renderMarkdown(text) {
   // Horizontal rule
   html = html.replace(/^---+$/gm, '<hr>');
 
-  // Line breaks → paragraphs (skip if inside block elements)
+  // Line breaks → paragraphs
   html = html.replace(/\n\n+/g, '</p><p>');
   html = html.replace(/\n/g, '<br>');
   html = '<p>' + html + '</p>';
 
+  // Réinjecter les blocs de code
   html = html.replace(/@@CODE_BLOCK_(\d+)@@/g, (_, index) => renderCodeBlock(codeBlocks[Number(index)]));
 
-  // Clean up empty paragraphs around block elements
+  // Réinjecter les images (cliquables pour plein écran)
+  html = html.replace(/@@IMAGE_BLOCK_(\d+)@@/g, (_, index) => {
+    const img = imageBlocks[Number(index)];
+    if (!img) return '';
+    return `<div class="generated-image-wrap"><img src="${img.src}" alt="${escHtml(img.alt)}" class="generated-img" style="max-width:100%;border-radius:8px;margin:8px 0;cursor:pointer;" onclick="this.requestFullscreen&&this.requestFullscreen()"></div>`;
+  });
+
+  // Nettoyage
   html = html.replace(/<p>\s*(<(?:div|pre|ul|ol|blockquote|h[1-6]|hr)[^>]*>)/g, '$1');
   html = html.replace(/(<\/(?:div|pre|ul|ol|blockquote|h[1-6]|hr)>)\s*<\/p>/g, '$1');
   html = html.replace(/<p><br><\/p>/g, '');
