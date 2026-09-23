@@ -1203,6 +1203,17 @@ body {
   background: rgba(230,18,42,.92);
   border-color: rgba(255,255,255,.22);
 }
+.generated-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.generated-image-wrap .generated-img {
+  display: block;
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 8px 0;
+}
 
 .input-hint {
   text-align: center;
@@ -2889,7 +2900,7 @@ function renderMarkdown(text) {
   html = html.replace(/@@IMAGE_BLOCK_(\d+)@@/g, (_, index) => {
     const img = imageBlocks[Number(index)];
     if (!img) return '';
-    return `<div class="generated-image-wrap"><img src="${img.src}" alt="${escHtml(img.alt)}" class="generated-img" style="max-width:100%;border-radius:8px;margin:8px 0;cursor:pointer;" onclick="this.requestFullscreen&&this.requestFullscreen()"></div>`;
+    return `<div class="generated-image-wrap"><img src="${img.src}" alt="${escHtml(img.alt)}" class="generated-img" onclick="this.requestFullscreen&&this.requestFullscreen()"><a class="generated-image-download" href="${img.src}" download="libre-claude-image.png" title="Télécharger l'image"><i class="fa-solid fa-download"></i></a></div>`;
   });
 
   // Nettoyage
