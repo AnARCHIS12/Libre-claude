@@ -11,7 +11,7 @@
   <img alt="PHP" src="https://img.shields.io/badge/PHP-8.3%2B-777BB4?style=for-the-badge&logo=php&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-local-003B57?style=for-the-badge&logo=sqlite&logoColor=white">
   <img alt="Claude AI" src="https://img.shields.io/badge/Claude AI-e6122a?style=for-the-badge">
-  <img alt="Docker" src="https://img.shields.io/docker/v/liberchat/libre-claude/latest?style=for-the-badge&logo=docker&label=Docker">
+  <img alt="Docker" src="https://img.shields.io/docker/v/liberchat/libre-claude?sort=semver&style=for-the-badge&logo=docker&label=Docker">
   <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/liberchat/libre-claude?style=for-the-badge&logo=docker&logoColor=white">
   <img alt="Langues" src="https://img.shields.io/badge/FR%20EN%20ES%20DE%20IT-multilingue-e6122a?style=for-the-badge">
   <img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-e6122a?style=for-the-badge">
