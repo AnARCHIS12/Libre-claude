@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/AnARCHIS12/Libre-claude/releases/tag/v1.3.0"><img alt="Release v1.3.0" src="https://img.shields.io/badge/Release-v1.3.0-e6122a?style=for-the-badge&logo=github&logoColor=white"></a>
   <img alt="PHP" src="https://img.shields.io/badge/PHP-8.3%2B-777BB4?style=for-the-badge&logo=php&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-local-003B57?style=for-the-badge&logo=sqlite&logoColor=white">
   <img alt="Claude AI" src="https://img.shields.io/badge/Claude AI-e6122a?style=for-the-badge">
@@ -22,7 +23,7 @@
 
 ## Aperçu
 
-**Libre Claude** est une interface conversationnelle web inspirée des assistants IA modernes, conçue pour tourner sur un hébergement mutualisé type Hostinger.
+**Libre Claude** est une interface conversationnelle web inspirée des assistants IA modernes, conçue pour tourner sur un hébergement mutualisé type Hostinger ou en conteneur Docker.
 
 Le projet utilise PHP pur, SQLite, cURL et des modèles affichés dans l'interface comme des modèles Claude. Il inclut une installation initiale, une authentification, un historique de conversations, une rotation des clés API et une interface responsive rouge/noir.
 
@@ -38,21 +39,21 @@ Le projet utilise PHP pur, SQLite, cURL et des modèles affichés dans l'interfa
 - Authentification avec mots de passe hashes.
 - Sessions stockées en base SQLite.
 - Conversations et messages persistants par utilisateur.
-- Support de plusieurs modèles Claude organisés par catégorie.
+- **Nouvelle génération Claude 5 & 4.5** : Claude Sonnet 5, Claude Sonnet 4.5, Claude Haiku 4.5, Claude Code Max, 100% compatibles Free Tier sans erreurs 403.
 - Rotation automatique des clés API partagées.
 - Clé API personnelle configurable par utilisateur.
 - Pool de clés Claude serveur administrable depuis l'interface.
 - Clés API internes Libre Claude (`lc_sk_...`) pour intégrer vos propres scripts.
 - **Recherche dans l'historique** : recherche instantanée dans les titres et le contenu des messages.
 - **Export de conversations** : export en Markdown ou JSON pour sauvegarder et partager vos discussions.
-- Dictée vocale avec Voxtral (`voxtral-mini-latest`) depuis le champ de message.
+- Dictée vocale avec Voxtral (`voxtral-small-latest`) depuis le champ de message.
 - Discussion vocale avec réponse audio Mistral ou voix locale du navigateur en fallback.
-- Recherche web Mistral avec rendu des sources dans le chat.
-- Analyse OCR Mistral pour images, PDF, DOCX et PPTX.
+- Recherche web avec routage automatique vers les modèles compatibles connecteurs.
+- Analyse OCR avec **fallback automatique Vision Multimodale** en cas de limite de quota sur `/v1/ocr`.
 - Génération d'images via les Agents Mistral et l'outil `image_generation`.
 - Interface multilingue : français, anglais, espagnol, allemand et italien.
 - Prévisualisation directe des blocs HTML/CSS/JS/SVG dans un panneau intégré.
-- Workspace utilisateur pour sauvegarder localement les blocs de code générés (indépendant de GitHub).
+- Workspace utilisateur pour coder et sauvegarder localement les blocs générés.
 - Suivi de la consommation avec affichage des jetons (tokens) utilisés par réponse de l'IA.
 - Connexion GitHub par dépôt, branche et token optionnel pour afficher l'arborescence du repo.
 - Connexion GitHub OAuth : l'utilisateur autorise l'app, puis choisit un dépôt accessible.
@@ -65,16 +66,33 @@ Le projet utilise PHP pur, SQLite, cURL et des modèles affichés dans l'interfa
 
 ## Capacités IA
 
-Libre Claude regroupe plusieurs fonctions Mistral dans une seule interface :
+Libre Claude regroupe plusieurs fonctions dans une seule interface :
 
 | Fonction | Interface | Backend |
 | --- | --- | --- |
-| Chat texte | Champ principal | Chat completions Mistral |
-| Recherche web | Bouton globe | Conversations API + outil `web_search` |
-| Dictée vocale | Bouton micro | Voxtral transcription |
+| Chat texte | Champ principal | Chat completions Mistral (`codestral-latest` par défaut) |
+| Recherche web | Bouton globe | Conversations API avec connecteur web (`mistral-small-latest`) |
+| Dictée vocale | Bouton micro | Voxtral transcription (`voxtral-small-latest`) |
 | Discussion vocale | Bouton téléphone | Transcription + réponse audio |
-| OCR / documents | Bouton fichier | `mistral-ocr-latest` |
+| OCR / documents | Bouton fichier | `mistral-ocr-latest` + Fallback Vision Multimodale (`ministral-14b-latest`) |
 | Génération d'images | Bouton baguette ou demande dans le chat | Agent Mistral + `image_generation` |
+
+### Modèles supportés (Génération Claude 5 & 4.5)
+
+Tous les modèles intégrés sont **100% compatibles avec les clés gratuites (Free Tier)** :
+
+| Modèle affiché | ID Technique | Description |
+| --- | --- | --- |
+| **Claude Sonnet 5** ⭐ *(Défaut)* | `codestral-latest` | Raisonnement de pointe, logique complexe et code ultra-rapide |
+| **Claude Sonnet 4.5** | `ministral-14b-latest` | Modèle multimodal 14B : texte, images, vision et documents |
+| **Claude Haiku 4.5** | `ministral-8b-latest` | Modèle rapide et polyvalent avec support vision |
+| **Claude Haiku Mini** | `ministral-3b-latest` | Modèle ultra-léger et économique pour réponses instantanées |
+| **Claude Code Max** | `codestral-2508` | Spécialisé code & architecture pour le Workspace GitHub |
+| **Claude Code Sonnet** | `mistral-code-latest` | Génération et refactorisation de code |
+| **Claude Code Haiku** | `mistral-code-fim-latest` | Complétion de code ultra-rapide (Fill-in-the-Middle) |
+| **Claude Vision 5** | `ministral-14b-2512` | Analyse visuelle avancée, diagrammes et OCR complexe |
+| **Claude Vision Lite** | `ministral-8b-2512` | Analyse visuelle rapide et légère |
+| **Claude Audio Haiku** | `voxtral-small-latest` | Transcription audio et dictée vocale |
 
 Pour générer une image, vous pouvez cliquer sur le bouton baguette ou écrire directement dans le chat :
 
@@ -350,8 +368,8 @@ docker buildx imagetools inspect votre-compte/libre-claude:latest
 Versionner une release :
 
 ```bash
-docker tag votre-compte/libre-claude:latest votre-compte/libre-claude:1.0.0
-docker push votre-compte/libre-claude:1.0.0
+docker tag votre-compte/libre-claude:latest votre-compte/libre-claude:v1.3.0
+docker push votre-compte/libre-claude:v1.3.0
 ```
 
 ### Déploiement production avec l'image publiée
@@ -569,7 +587,7 @@ Les tokens internes permettent d'appeler votre interface comme une API sans part
 curl https://votre-domaine.com/chat.php \
   -H 'Authorization: Bearer lc_sk_votre_clé' \
   -H 'Content-Type: application/json' \
-  -d '{"message":"Bonjour Libre Claude","model":"claude-opus-4.5"}'
+  -d '{"message":"Bonjour Libre Claude","model":"claude-sonnet-5"}'
 ```
 
 La réponse contient un `conversation_id`. Pour continuer le même fil :
@@ -578,7 +596,7 @@ La réponse contient un `conversation_id`. Pour continuer le même fil :
 curl https://votre-domaine.com/chat.php \
   -H 'Authorization: Bearer lc_sk_votre_clé' \
   -H 'Content-Type: application/json' \
-  -d '{"conversation_id":1,"message":"Continue","model":"claude-opus-4.5"}'
+  -d '{"conversation_id":1,"message":"Continue","model":"claude-sonnet-5"}'
 ```
 
 Le serveur vérifie la clé `lc_sk_...`, retrouve l'utilisateur associé, crée ou charge sa conversation, puis appelle l'API avec le pool de clés serveur ou la clé personnelle de l'utilisateur.
