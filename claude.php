@@ -212,6 +212,36 @@ class ClaudeClient {
             return ['success' => false, 'error' => 'Fichier illisible'];
         }
 
+        $isPdf = $mimeType === 'application/pdf' || strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf';
+
+        // Pour les PDFs : essayer pdftotext EN PREMIER (gratuit, pas de rate limit)
+        // On n'appelle Mistral OCR que si le PDF est un scan (pdftotext retourne vide)
+        if ($isPdf) {
+            $pdfToText = trim(shell_exec('which pdftotext 2>/dev/null') ?? '');
+            if ($pdfToText) {
+                $tmpOut = tempnam(sys_get_temp_dir(), 'pdftxt_') . '.txt';
+                $cmd = escapeshellarg($pdfToText) . ' -layout -enc UTF-8 ' . escapeshellarg($filePath) . ' ' . escapeshellarg($tmpOut) . ' 2>/dev/null';
+                exec($cmd, $out, $rc);
+                if ($rc === 0 && is_readable($tmpOut)) {
+                    $text = trim(file_get_contents($tmpOut));
+                    @unlink($tmpOut);
+                    if ($text !== '') {
+                        libreclaude_log("pdftotext success: " . strlen($text) . " chars", 1);
+                        return [
+                            'success' => true,
+                            'text'    => $text,
+                            'model'   => 'pdftotext (extraction locale)',
+                            'raw'     => [],
+                        ];
+                    }
+                }
+                @unlink($tmpOut);
+                // pdftotext vide = PDF scanné → on continue vers Mistral OCR
+                libreclaude_log("pdftotext vide, PDF probablement scanné → Mistral OCR", 1);
+            }
+        }
+
+        // Mistral OCR (pour images et PDFs scannés)
         $maxTries = count($this->apiKeys) * 2;
         $lastError = '';
         for ($i = 0; $i < $maxTries; $i++) {
@@ -222,7 +252,6 @@ class ClaudeClient {
                 if (trim($text) === '') {
                     throw new Exception('OCR vide');
                 }
-
                 return [
                     'success' => true,
                     'text'    => trim($text),
@@ -232,7 +261,6 @@ class ClaudeClient {
             } catch (Exception $e) {
                 $lastError = $e->getMessage();
                 libreclaude_log("OCR key[$this->currentKeyIndex] error: $lastError", 2);
-
                 if (strpos($lastError, '429') !== false || strpos($lastError, '401') !== false || strpos($lastError, '402') !== false) {
                     $this->currentKeyIndex = ($this->currentKeyIndex + 1) % count($this->apiKeys);
                 }
@@ -272,29 +300,6 @@ class ClaudeClient {
             }
         }
 
-        // Fallback pdftotext pour les PDFs quand l'OCR Mistral est rate-limité
-        if ($mimeType === 'application/pdf' || strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf') {
-            $pdfToText = trim(shell_exec('which pdftotext 2>/dev/null') ?? '');
-            if ($pdfToText) {
-                $tmpOut = tempnam(sys_get_temp_dir(), 'pdftxt_') . '.txt';
-                $cmd = escapeshellarg($pdfToText) . ' -layout -enc UTF-8 ' . escapeshellarg($filePath) . ' ' . escapeshellarg($tmpOut) . ' 2>/dev/null';
-                exec($cmd, $out, $rc);
-                if ($rc === 0 && is_readable($tmpOut)) {
-                    $text = trim(file_get_contents($tmpOut));
-                    @unlink($tmpOut);
-                    if ($text !== '') {
-                        libreclaude_log("pdftotext fallback success: " . strlen($text) . " chars", 1);
-                        return [
-                            'success' => true,
-                            'text'    => $text,
-                            'model'   => 'pdftotext (extraction locale)',
-                            'raw'     => [],
-                        ];
-                    }
-                }
-                @unlink($tmpOut);
-            }
-        }
 
         return ['success' => false, 'error' => 'Analyse OCR impossible. ' . $lastError];
     }
