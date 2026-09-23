@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AnARCHIS12/Libre-claude/releases/tag/v1.3.0"><img alt="Release v1.3.0" src="https://img.shields.io/badge/Release-v1.3.0-e6122a?style=for-the-badge&logo=github&logoColor=white"></a>
+  <a href="https://github.com/AnARCHIS12/Libre-claude/releases/tag/v1.3.1"><img alt="Release v1.3.1" src="https://img.shields.io/badge/Release-v1.3.1-e6122a?style=for-the-badge&logo=github&logoColor=white"></a>
   <img alt="PHP" src="https://img.shields.io/badge/PHP-8.3%2B-777BB4?style=for-the-badge&logo=php&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-local-003B57?style=for-the-badge&logo=sqlite&logoColor=white">
   <img alt="Claude AI" src="https://img.shields.io/badge/Claude AI-e6122a?style=for-the-badge">
@@ -368,8 +368,8 @@ docker buildx imagetools inspect votre-compte/libre-claude:latest
 Versionner une release :
 
 ```bash
-docker tag votre-compte/libre-claude:latest votre-compte/libre-claude:v1.3.0
-docker push votre-compte/libre-claude:v1.3.0
+docker tag votre-compte/libre-claude:latest votre-compte/libre-claude:v1.3.1
+docker push votre-compte/libre-claude:v1.3.1
 ```
 
 ### Déploiement production avec l'image publiée
