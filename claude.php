@@ -54,6 +54,8 @@ class ClaudeClient {
 
         $maxTries = count($this->apiKeys) * 2;
 
+        $lastError = '';
+
         for ($i = 0; $i < $maxTries; $i++) {
             $apiKey = $this->apiKeys[$this->currentKeyIndex];
 
@@ -72,6 +74,7 @@ class ClaudeClient {
 
             } catch (Exception $e) {
                 $msg = $e->getMessage();
+                $lastError = $msg;
                 libreclaude_log("API key[$this->currentKeyIndex] error: $msg", 2);
 
                 // Rotation si rate limit ou clé invalide
@@ -81,7 +84,8 @@ class ClaudeClient {
             }
         }
 
-        return ['success' => false, 'error' => 'Toutes les clés API ont échoué. Vérifiez vos clés Claude.'];
+        $errorDetail = $lastError ? " ($lastError)" : '';
+        return ['success' => false, 'error' => "Toutes les clés API ont échoué$errorDetail. Vérifiez vos clés Claude."];
     }
 
     public function transcribe($filePath, $fileName, $mimeType = 'audio/webm', $language = 'fr') {
