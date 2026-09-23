@@ -239,24 +239,22 @@ class ClaudeClient {
             }
         }
 
-        // Fallback vision si l'endpoint OCR dédié est en rate-limit sur compte gratuit
-        if (strpos($mimeType, 'image/') === 0 || in_array($mimeType, ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'])) {
+        // Fallback vision pour les images
+        if (strpos($mimeType, 'image/') === 0) {
             try {
                 $apiKey = $this->apiKeys[0] ?? '';
                 $bytes = file_get_contents($filePath);
                 if ($apiKey && $bytes) {
                     $b64 = 'data:' . $mimeType . ';base64,' . base64_encode($bytes);
                     $visionPayload = [
-                        'model' => 'ministral-14b-latest',
-                        'messages' => [
-                            [
-                                'role' => 'user',
-                                'content' => [
-                                    ['type' => 'text', 'text' => "Transcris et extrais fidèlement tout le texte lisible sur ce document ou cette image (OCR). Ne rajoute aucun commentaire."],
-                                    ['type' => 'image_url', 'image_url' => ['url' => $b64]],
-                                ],
+                        'model' => 'pixtral-12b-2409',
+                        'messages' => [[
+                            'role' => 'user',
+                            'content' => [
+                                ['type' => 'text', 'text' => "Transcris et extrais fidèlement tout le texte lisible sur ce document ou cette image (OCR). Ne rajoute aucun commentaire."],
+                                ['type' => 'image_url', 'image_url' => ['url' => $b64]],
                             ],
-                        ],
+                        ]],
                     ];
                     $res = $this->doRequest($apiKey, $visionPayload);
                     $extracted = trim($res['choices'][0]['message']['content'] ?? '');
@@ -264,7 +262,7 @@ class ClaudeClient {
                         return [
                             'success' => true,
                             'text'    => $extracted,
-                            'model'   => 'ministral-14b-latest (Vision OCR)',
+                            'model'   => 'pixtral-12b-2409 (Vision OCR)',
                             'raw'     => $res,
                         ];
                     }
@@ -274,7 +272,31 @@ class ClaudeClient {
             }
         }
 
-        return ['success' => false, 'error' => 'Analyse OCR Mistral impossible. ' . $lastError];
+        // Fallback pdftotext pour les PDFs quand l'OCR Mistral est rate-limité
+        if ($mimeType === 'application/pdf' || strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf') {
+            $pdfToText = trim(shell_exec('which pdftotext 2>/dev/null') ?? '');
+            if ($pdfToText) {
+                $tmpOut = tempnam(sys_get_temp_dir(), 'pdftxt_') . '.txt';
+                $cmd = escapeshellarg($pdfToText) . ' -layout -enc UTF-8 ' . escapeshellarg($filePath) . ' ' . escapeshellarg($tmpOut) . ' 2>/dev/null';
+                exec($cmd, $out, $rc);
+                if ($rc === 0 && is_readable($tmpOut)) {
+                    $text = trim(file_get_contents($tmpOut));
+                    @unlink($tmpOut);
+                    if ($text !== '') {
+                        libreclaude_log("pdftotext fallback success: " . strlen($text) . " chars", 1);
+                        return [
+                            'success' => true,
+                            'text'    => $text,
+                            'model'   => 'pdftotext (extraction locale)',
+                            'raw'     => [],
+                        ];
+                    }
+                }
+                @unlink($tmpOut);
+            }
+        }
+
+        return ['success' => false, 'error' => 'Analyse OCR impossible. ' . $lastError];
     }
 
     public function generateImage($prompt) {
