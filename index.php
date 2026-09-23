@@ -841,8 +841,8 @@ body {
 
 .export-buttons {
   display: flex;
-  gap: 8px;
-  margin-left: 20px;
+  gap: 4px;
+  align-items: center;
 }
 
 .export-btn {
@@ -851,17 +851,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(230, 18, 42, 0.1);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 8px;
-  color: var(--accent);
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
+  font-size: 15px;
 }
 
 .export-btn:hover {
-  background: rgba(230, 18, 42, 0.2);
+  background: rgba(230, 18, 42, 0.12);
   border-color: var(--accent);
+  color: var(--accent);
 }
 
 .model-picker-btn {
@@ -1530,15 +1532,7 @@ body {
             <?php endforeach; ?>
           <?php endforeach; ?>
         </div>
-        <!-- Export buttons -->
-        <div class="export-buttons" id="export-buttons" style="display: none;">
-          <button type="button" class="export-btn" onclick="exportConversation('markdown')" title="<?= htmlspecialchars($t('export_markdown')) ?>">
-            <i class="fa-solid fa-file-lines"></i>
-          </button>
-          <button type="button" class="export-btn" onclick="exportConversation('json')" title="<?= htmlspecialchars($t('export_json')) ?>">
-            <i class="fa-solid fa-file-code"></i>
-          </button>
-        </div>
+
       </div>
 
       <!-- Textarea + actions -->
@@ -1574,6 +1568,15 @@ body {
             <button class="voice-btn" id="voice-btn" onclick="toggleDictation()" type="button" title="<?= htmlspecialchars($t('voice_title')) ?>" aria-label="<?= htmlspecialchars($t('voice_title')) ?>">
               <i class="fa-solid fa-microphone"></i>
             </button>
+            <!-- Export buttons (inline in toolbar) -->
+            <div class="export-buttons" id="export-buttons" style="display: none; gap: 4px;">
+              <button type="button" class="export-btn" onclick="exportConversation('markdown')" title="<?= htmlspecialchars($t('export_markdown')) ?>" aria-label="<?= htmlspecialchars($t('export_markdown')) ?>">
+                <i class="fa-solid fa-file-lines"></i>
+              </button>
+              <button type="button" class="export-btn" onclick="exportConversation('json')" title="<?= htmlspecialchars($t('export_json')) ?>" aria-label="<?= htmlspecialchars($t('export_json')) ?>">
+                <i class="fa-solid fa-file-code"></i>
+              </button>
+            </div>
             <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled title="<?= htmlspecialchars($t('send')) ?>">
               <svg viewBox="0 0 20 20" fill="currentColor">
                 <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
