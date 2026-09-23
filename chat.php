@@ -156,6 +156,46 @@ try {
         $apiMessages[] = ['role' => 'user', 'content' => $message];
     }
 
+    // Si l'utilisateur demande une image dans le chat, router vers l'agent image
+    if (!$useWebSearch && $claude->isImagePrompt($message)) {
+        try {
+            $imgResult = $claude->generateImage($message);
+            if (!empty($imgResult['success'])) {
+                $assistantContent = $imgResult['content'] ?? 'Image générée.';
+                if (!empty($imgResult['images'])) {
+                    foreach ($imgResult['images'] as $img) {
+                        $assistantContent .= "\n\n![Image](data:" . ($img['mime'] ?? 'image/png') . ";base64," . $img['base64'] . ")";
+                    }
+                }
+                if ($convId) {
+                    $db->insert('messages', [
+                        'conversation_id' => $convId,
+                        'role'            => 'assistant',
+                        'content'         => $assistantContent,
+                        'model_used'      => $imgResult['model'] ?? MISTRAL_IMAGE_MODEL,
+                        'tokens_used'     => 0,
+                    ]);
+                    $db->update('conversations', ['updated_at' => date('Y-m-d H:i:s')], 'id = ?', [$convId]);
+                }
+
+                echo json_encode([
+                    'success'         => true,
+                    'content'         => $imgResult['content'] ?? 'Image générée.',
+                    'model'           => $imgResult['model'] ?? MISTRAL_IMAGE_MODEL,
+                    'model_name'      => 'Générateur d\'images',
+                    'conversation_id' => $convId,
+                    'web_search'      => false,
+                    'sources'         => [],
+                    'images'          => $imgResult['images'] ?? [],
+                    'usage'           => ['total_tokens' => 0],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+        } catch (Exception $e) {
+            libreclaude_log("Auto-image generation failed: " . $e->getMessage(), 2);
+        }
+    }
+
     // Appel Mistral
     if ($useWebSearch) {
         $webInputs = [[

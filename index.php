@@ -2051,11 +2051,9 @@ async function generateImageFromPrompt(promptOverride = null) {
   input.disabled = true;
   document.getElementById('welcome').style.display = 'none';
   setWelcomeMode(false);
-  appendUserMsg(`${uiText.image_generate}: ${prompt}`);
-  if (promptOverride === null) {
-    input.value = '';
-    input.style.height = 'auto';
-  }
+  appendUserMsg(prompt);
+  input.value = '';
+  input.style.height = 'auto';
   const thinkId = appendThinking(uiText.image_generating);
   setInputHint(uiText.image_generating);
   scrollBottom();
@@ -2064,7 +2062,7 @@ async function generateImageFromPrompt(promptOverride = null) {
     const resp = await fetch('image_generate.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, conversation_id: currentConvId }),
     });
     const raw = await resp.text();
     let data;
@@ -2077,6 +2075,10 @@ async function generateImageFromPrompt(promptOverride = null) {
     removeThinking(thinkId);
     if (data.success) {
       appendAiMsg(data.content || uiText.generated_images, data.model || model, false, [], data.images || []);
+      if (data.conversation_id && currentConvId !== data.conversation_id) {
+        currentConvId = data.conversation_id;
+        addConvToSidebar(data.conversation_id, prompt);
+      }
       return data;
     } else {
       appendAiMsg(data.error || uiText.image_error, model, true);
@@ -2101,21 +2103,49 @@ function normalizeIntentText(text) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[’']/g, ' ');
+    .replace(/[-_’']/g, ' ');
 }
 
 function isImagePrompt(text) {
-  const s = normalizeIntentText(text);
-  const imageWords = '(image|photo|illustration|affiche|poster|visuel|avatar|logo|wallpaper|fond d ecran)';
-  if (new RegExp(`\\b(genere|generer|cree|creer|fais|fait|make|create)\\b[\\s\\S]{0,80}\\b${imageWords}\\b`).test(s)) return true;
-  if (new RegExp(`\\b(dessine|illustre|draw)\\b`).test(s)) return true;
-  if (new RegExp(`\\b(image|photo|illustration|affiche|poster|visuel|avatar|logo)\\s+(de|d |pour)\\b`).test(s)) return true;
-  if (/^\s*(genere|generer|cree|creer|fais|fait|make|create)\s+(un|une|des)\s+chat\b/.test(s)) return true;
-  const words = s.trim().split(/\s+/).filter(Boolean);
-  const asksForText = /\b(explique|analyse|resume|recherche|cherche|pourquoi|comment|quoi|qui|quand|code|ecris|redige|traduis|corrige)\b/.test(s);
-  const visualNoun = /\b(chat|mouton|chien|animal|personnage|portrait|paysage|scene|robot|voiture|maison|ville|logo|affiche|poster|avatar|icone|mascotte|dessin|illustration)\b/.test(s);
-  const visualCue = /\b(rouge|noir|bleu|vert|jaune|rose|violet|orange|blanc|punk|anarchiste|realiste|stylise|style|minimaliste|3d|anime|manga|vectoriel|cinematique)\b/.test(s);
-  if (words.length <= 14 && !asksForText && visualNoun && visualCue) return true;
+  const s = normalizeIntentText(text).trim();
+  if (!s) return false;
+
+  const asksForNonImage = /\b(explique|expliquer|analyse|analyser|resume|resumer|recherche|rechercher|cherche|chercher|pourquoi|comment|quoi|qui|quand|code|coder|script|programme|fonction|classe|ecris|ecrire|redige|rediger|traduis|traduire|corrige|corriger|histoire|poeme|article|paragraphe|lettre|mail|email|site|web|app|application)\b/.test(s);
+  if (/\b(comment|pourquoi|how|why)\b/.test(s)) return false;
+
+  const imageWords = '(image|images|photo|photos|photographie|photographies|illustration|illustrations|dessin|dessins|affiche|affiches|poster|posters|visuel|visuels|avatar|avatars|logo|logos|wallpaper|wallpapers|fond d ecran|peinture|peintures|tableau|tableaux|rendu 3d|artwork)';
+
+  // 1. Verbe de création + mot clé image (génère une image, fais-moi un dessin, etc.)
+  if (new RegExp(`\\b(genere|generer|generez|cree|creer|creez|fais|fait|faire|faisez|donne|donner|montre|montrer|make|create|generate|show)\\b[\\s\\S]{0,60}\\b${imageWords}\\b`).test(s)) {
+    if (!/\b(code|script|fonction|classe|programme)\b/.test(s)) return true;
+  }
+
+  // 2. Mot image + "de / d / pour" (photo d'un chat, dessin de voiture, etc.)
+  if (new RegExp(`\\b${imageWords}\\s+(de|d |pour)\\b`).test(s)) {
+    if (!asksForNonImage) return true;
+  }
+
+  // 3. Verbes de dessin / peinture directs (dessine-moi un mouton, dessiner un chat, peins un paysage, etc.)
+  if (new RegExp(`\\b(dessine|dessines|dessinez|dessiner|illustre|illustres|illustrez|illustrer|peins|peint|peindre|peignez|croque|croquer|draw|draws|drawing|paint|painting)\\b`).test(s)) {
+    if (!asksForNonImage) return true;
+  }
+
+  // 4. Verbe de création + (pronom optionnel) + article + sujet visuel (génère-moi un chat, crée un ordinateur, fais un robot, etc.)
+  const creationVerb = '\\b(genere|generer|generez|cree|creer|creez|fais|fait|faire|make|create)\\b';
+  const pronounOrNot = '(\\s+(moi|nous|me|us))?';
+  const article = '\\s+(un|une|des|le|la|les|a|an|the|du)';
+  const visualNoun = '\\b(chat|chats|chaton|chatons|chien|chiens|chiot|chiots|animal|animaux|personnage|personnages|portrait|portraits|paysage|paysages|scene|scenes|robot|robots|voiture|voitures|maison|maisons|ville|villes|chateau|chateaux|arbre|arbres|fleur|fleurs|foret|forets|montagne|montagnes|mer|ocean|plage|ordinateur|ordinateurs|pc|chambre|bureau|bateau|avion|fusee|galaxie|planete|etoile|soleil|lune|monstre|dragon|dragons|cheval|chevaux|oiseau|oiseaux|poisson|poissons|lion|tigre|loup|renard|ours|panda|singe|mouton|moutons)\\b';
+
+  if (new RegExp(`${creationVerb}${pronounOrNot}${article}\\s+${visualNoun}`).test(s)) {
+    if (!asksForNonImage) return true;
+  }
+
+  // 5. Entrée courte avec nom visuel + teinte/style (ex: "ordinateur rouge et noir", "chat cyberpunk")
+  const words = s.split(/\s+/).filter(Boolean);
+  const visualCue = /\b(rouge|noir|noire|bleu|bleue|vert|verte|jaune|rose|violet|violette|orange|blanc|blanche|punk|cyberpunk|steampunk|anarchiste|realiste|stylise|style|minimaliste|3d|anime|manga|vectoriel|cinematique|futuriste|sombre|lumineux|retro|vintage|neon|flou|pixel art)\b/.test(s);
+  const hasVisualNoun = new RegExp(visualNoun).test(s);
+  if (words.length <= 12 && !asksForNonImage && hasVisualNoun && visualCue) return true;
+
   return false;
 }
 
@@ -2568,7 +2598,7 @@ async function sendMessage(messageOverride = null, options = {}) {
     removeThinking(thinkId);
 
     if (data.success) {
-      appendAiMsg(data.content, data.model, false, data.sources || [], [], data.usage ? data.usage.total_tokens : 0);
+      appendAiMsg(data.content, data.model, false, data.sources || [], data.images || [], data.usage ? data.usage.total_tokens : 0);
       if (data.conversation_id && currentConvId !== data.conversation_id) {
         currentConvId = data.conversation_id;
         addConvToSidebar(data.conversation_id, msg);

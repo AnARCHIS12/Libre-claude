@@ -331,6 +331,44 @@ class ClaudeClient {
         return ['success' => false, 'error' => 'Génération d’image Mistral impossible. ' . $lastError];
     }
 
+    public function isImagePrompt($text) {
+        $s = mb_strtolower(trim($text), 'UTF-8');
+        $s = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+        $s = preg_replace('/[^a-z0-9]+/i', ' ', $s);
+        $s = trim($s);
+        if ($s === '') return false;
+
+        $asksForNonImage = (bool)preg_match('/\b(explique|expliquer|analyse|analyser|resume|resumer|recherche|rechercher|cherche|chercher|pourquoi|comment|quoi|qui|quand|code|coder|script|programme|fonction|classe|ecris|ecrire|redige|rediger|traduis|traduire|corrige|corriger|histoire|poeme|article|paragraphe|lettre|mail|email|site|web|app|application)\b/i', $s);
+        if (preg_match('/\b(comment|pourquoi|how|why)\b/i', $s)) return false;
+
+        $imageWords = '(image|images|photo|photos|photographie|photographies|illustration|illustrations|dessin|dessins|affiche|affiches|poster|posters|visuel|visuels|avatar|avatars|logo|logos|wallpaper|wallpapers|fond d ecran|peinture|peintures|tableau|tableaux|rendu 3d|artwork)';
+
+        if (preg_match('/\b(genere|generer|generez|cree|creer|creez|fais|fait|faire|faisez|donne|donner|montre|montrer|make|create|generate|show)\b[\s\S]{0,60}\b' . $imageWords . '\b/i', $s)) {
+            if (!preg_match('/\b(code|script|fonction|classe|programme)\b/i', $s)) return true;
+        }
+
+        if (preg_match('/\b' . $imageWords . '\s+(de|d|pour)\b/i', $s)) {
+            if (!$asksForNonImage) return true;
+        }
+
+        if (preg_match('/\b(dessine|dessines|dessinez|dessiner|illustre|illustres|illustrez|illustrer|peins|peint|peindre|peignez|croque|croquer|draw|draws|drawing|paint|painting)\b/i', $s)) {
+            if (!$asksForNonImage) return true;
+        }
+
+        $visualNoun = '(chat|chats|chaton|chatons|chien|chiens|chiot|chiots|animal|animaux|personnage|personnages|portrait|portraits|paysage|paysages|scene|scenes|robot|robots|voiture|voitures|maison|maisons|ville|villes|chateau|chateaux|arbre|arbres|fleur|fleurs|foret|forets|montagne|montagnes|mer|ocean|plage|ordinateur|ordinateurs|pc|chambre|bureau|bateau|avion|fusee|galaxie|planete|etoile|soleil|lune|monstre|dragon|dragons|cheval|chevaux|oiseau|oiseaux|poisson|poissons|lion|tigre|loup|renard|ours|panda|singe|mouton|moutons)';
+
+        if (preg_match('/\b(genere|generer|generez|cree|creer|creez|fais|fait|faire|make|create)\b(\s+(moi|nous|me|us))?\s+(un|une|des|le|la|les|a|an|the|du)\s+' . $visualNoun . '\b/i', $s)) {
+            if (!$asksForNonImage) return true;
+        }
+
+        $words = preg_split('/\s+/', $s, -1, PREG_SPLIT_NO_EMPTY);
+        $visualCue = (bool)preg_match('/\b(rouge|noir|noire|bleu|bleue|vert|verte|jaune|rose|violet|violette|orange|blanc|blanche|punk|cyberpunk|steampunk|anarchiste|realiste|stylise|style|minimaliste|3d|anime|manga|vectoriel|cinematique|futuriste|sombre|lumineux|retro|vintage|neon|flou|pixel art)\b/i', $s);
+        $hasVisualNoun = (bool)preg_match('/\b' . $visualNoun . '\b/i', $s);
+        if (count($words) <= 12 && !$asksForNonImage && $hasVisualNoun && $visualCue) return true;
+
+        return false;
+    }
+
     private function doRequest($apiKey, $params) {
         $ch = curl_init(MISTRAL_API_ENDPOINT);
 

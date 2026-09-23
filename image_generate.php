@@ -45,11 +45,41 @@ try {
     $result = $claude->generateImage($prompt);
 
     if (!empty($result['success'])) {
+        $convId = isset($input['conversation_id']) ? (int)$input['conversation_id'] : null;
+        if (!$convId && !empty($user['id'])) {
+            $convId = $db->insert('conversations', [
+                'user_id' => $user['id'],
+                'title'   => mb_substr($prompt, 0, 50, 'UTF-8'),
+            ]);
+        }
+        if ($convId) {
+            $db->insert('messages', [
+                'conversation_id' => $convId,
+                'role'            => 'user',
+                'content'         => $prompt,
+                'model_used'      => 'image-generation',
+            ]);
+            $assistantContent = $result['content'] ?? 'Image générée.';
+            if (!empty($result['images'])) {
+                foreach ($result['images'] as $img) {
+                    $assistantContent .= "\n\n![Image](data:" . ($img['mime'] ?? 'image/png') . ";base64," . $img['base64'] . ")";
+                }
+            }
+            $db->insert('messages', [
+                'conversation_id' => $convId,
+                'role'            => 'assistant',
+                'content'         => $assistantContent,
+                'model_used'      => $result['model'] ?? MISTRAL_IMAGE_MODEL,
+            ]);
+            $db->update('conversations', ['updated_at' => date('Y-m-d H:i:s')], 'id = ?', [$convId]);
+        }
+
         echo json_encode([
             'success' => true,
             'content' => $result['content'] ?? 'Image générée.',
             'model' => $result['model'] ?? MISTRAL_IMAGE_MODEL,
             'images' => $result['images'] ?? [],
+            'conversation_id' => $convId,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     } else {
         echo json_encode([
