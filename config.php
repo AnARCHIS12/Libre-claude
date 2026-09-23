@@ -51,71 +51,68 @@ define('GITHUB_OAUTH_CLIENT_ID', libreclaude_env('GITHUB_OAUTH_CLIENT_ID', ''));
 define('GITHUB_OAUTH_CLIENT_SECRET', libreclaude_env('GITHUB_OAUTH_CLIENT_SECRET', ''));
 define('GITHUB_OAUTH_SCOPE', trim(libreclaude_env('GITHUB_OAUTH_SCOPE', '')));
 
-// Modèles organisés par catégorie
+// Modèles organisés par catégorie (alignés sur les modèles Claude récents et 100% fonctionnels en gratuit)
 define('MISTRAL_MODELS', [
     'flagship' => [
-        ['id' => 'mistral-large-latest', 'name' => 'Claude Opus 4.6', 'desc' => 'Dernière génération Large (Payant / Carte bancaire)'],
-        ['id' => 'mistral-large-2512', 'name' => 'Claude Opus 4.5', 'desc' => 'Raisonnement avancé (Payant / Carte bancaire)'],
-        ['id' => 'mistral-large-2411', 'name' => 'Claude Opus 4', 'desc' => 'Version stable entreprise (Payant / Carte bancaire)'],
+        ['id' => 'codestral-latest', 'name' => 'Claude 3.7 Sonnet', 'desc' => 'Raisonnement hybride, logique complexe, code — Gratuit'],
+        ['id' => 'ministral-14b-latest', 'name' => 'Claude 3.5 Sonnet', 'desc' => 'Multimodal 14B, vision, analyse documents — Gratuit'],
+        ['id' => 'ministral-8b-latest', 'name' => 'Claude 3.5 Haiku', 'desc' => 'Ultra rapide, multitâche, vision — Gratuit'],
+        ['id' => 'ministral-3b-latest', 'name' => 'Claude 3 Haiku', 'desc' => 'Modèle compact ultra-léger — Gratuit'],
     ],
     'code' => [
-        ['id' => 'codestral-latest', 'name' => 'Claude Code Max', 'desc' => 'Code & Chat temps réel — Gratuit'],
-        ['id' => 'codestral-2508', 'name' => 'Claude Code Opus', 'desc' => 'Architecture, refactoring, FIM — Gratuit'],
-        ['id' => 'mistral-code-latest', 'name' => 'Claude Code Sonnet', 'desc' => 'Débogage, patterns complexes — Gratuit'],
-        ['id' => 'mistral-code-fim-latest', 'name' => 'Claude Code Haiku', 'desc' => 'Tests unitaires, CI/CD — Gratuit'],
+        ['id' => 'codestral-2508', 'name' => 'Claude Code', 'desc' => 'Assistant développeur, refactoring, FIM — Gratuit'],
+        ['id' => 'mistral-code-latest', 'name' => 'Claude Code Sonnet', 'desc' => 'Débogage, architecture logicielle — Gratuit'],
+        ['id' => 'mistral-code-fim-latest', 'name' => 'Claude Code Haiku', 'desc' => 'Tests unitaires, CI/CD temps réel — Gratuit'],
     ],
     'vision' => [
-        ['id' => 'ministral-14b-latest', 'name' => 'Claude Vision Opus', 'desc' => 'Multimodal 14B, diagrammes, UI — Gratuit'],
-        ['id' => 'ministral-8b-latest', 'name' => 'Claude Vision Haiku', 'desc' => 'Multimodal 8B, OCR rapide — Gratuit'],
-    ],
-    'edge' => [
-        ['id' => 'ministral-14b-2512', 'name' => 'Claude Local Sonnet', 'desc' => 'Modèle compact puissant 14B — Gratuit'],
-        ['id' => 'ministral-8b-2512', 'name' => 'Claude Local Haiku', 'desc' => 'All-rounder équilibré 8B — Gratuit'],
-        ['id' => 'ministral-3b-latest', 'name' => 'Claude Local Mini', 'desc' => 'Ultra-léger 3B, commandes courtes — Gratuit'],
-    ],
-    'medium' => [
-        ['id' => 'mistral-medium-latest', 'name' => 'Claude Sonnet 4.6', 'desc' => 'Mistral Medium 3.5 — multimodal, agentique'],
-        ['id' => 'mistral-medium-2604', 'name' => 'Claude Sonnet 4.5', 'desc' => 'Analyse textuelle, rédaction'],
-        ['id' => 'mistral-medium-3', 'name' => 'Claude Sonnet 4', 'desc' => 'RAG, synthèse documents'],
-    ],
-    'small' => [
-        ['id' => 'mistral-small-latest', 'name' => 'Claude Haiku 4.6', 'desc' => 'Mistral Small 4 — hybride rapide et efficace'],
-        ['id' => 'mistral-small-2603', 'name' => 'Claude Haiku 4.5', 'desc' => 'Extraction masse, pipelines'],
-    ],
-    'agent' => [
-        ['id' => 'magistral-medium-latest', 'name' => 'Claude Agent Sonnet', 'desc' => 'Orchestration multi-agents'],
-        ['id' => 'magistral-small-latest', 'name' => 'Claude Agent Haiku', 'desc' => 'Routage rapide prompts'],
+        ['id' => 'ministral-14b-2512', 'name' => 'Claude Vision Sonnet', 'desc' => 'Analyse d\'images, plans, diagrammes 14B — Gratuit'],
+        ['id' => 'ministral-8b-2512', 'name' => 'Claude Vision Haiku', 'desc' => 'OCR rapide, détection d\'objets 8B — Gratuit'],
     ],
     'audio' => [
         ['id' => 'voxtral-small-latest', 'name' => 'Claude Audio Haiku', 'desc' => 'Analyse sémantique audio — Gratuit'],
-        ['id' => 'voxtral-small-2507', 'name' => 'Claude Audio Mini', 'desc' => 'Traitement flux rapide — Gratuit'],
+        ['id' => 'voxtral-small-2507', 'name' => 'Claude Audio Mini', 'desc' => 'Traitement flux vocal rapide — Gratuit'],
     ],
 ]);
 
 define('MODEL_ALIASES', [
-    'claude-opus-4.6'        => 'mistral-large-latest',
-    'claude-opus-4.5'        => 'mistral-large-2512',
-    'claude-opus-4'          => 'mistral-large-2411',
-    'claude-sonnet-4.6'      => 'mistral-medium-latest',
-    'claude-sonnet-4.5'      => 'mistral-medium-2604',
-    'claude-sonnet-4'        => 'mistral-medium-3',
-    'claude-haiku-4.6'       => 'mistral-small-latest',
-    'claude-haiku-4.5'       => 'mistral-small-2603',
-    'claude-code-max'        => 'codestral-latest',
-    'claude-code-opus'       => 'codestral-2508',
+    // Nouveaux modèles actuels
+    'claude-3.7-sonnet'      => 'codestral-latest',
+    'claude-3.5-sonnet'      => 'ministral-14b-latest',
+    'claude-3.5-haiku'       => 'ministral-8b-latest',
+    'claude-3-haiku'         => 'ministral-3b-latest',
+    'claude-code'            => 'codestral-2508',
     'claude-code-sonnet'     => 'mistral-code-latest',
     'claude-code-haiku'      => 'mistral-code-fim-latest',
-    'claude-agent-sonnet'    => 'magistral-medium-latest',
-    'claude-agent-haiku'     => 'magistral-small-latest',
+    'claude-vision-sonnet'   => 'ministral-14b-2512',
+    'claude-vision-haiku'    => 'ministral-8b-2512',
+    'claude-audio-haiku'     => 'voxtral-small-latest',
+    'claude-audio-mini'      => 'voxtral-small-2507',
+
+    // Redirections transparentes des anciens modèles Opus (pour éviter toute erreur 403)
+    'claude-opus-4.6'        => 'codestral-latest',
+    'claude-opus-4.5'        => 'codestral-latest',
+    'claude-opus-4'          => 'codestral-latest',
+    'mistral-large-latest'   => 'codestral-latest',
+    'mistral-large-2512'     => 'codestral-latest',
+    'mistral-large-2411'     => 'codestral-latest',
+
+    // Rétrocompatibilité anciens noms d'alias
+    'claude-sonnet-4.6'      => 'codestral-latest',
+    'claude-sonnet-4.5'      => 'ministral-14b-latest',
+    'claude-sonnet-4'        => 'ministral-14b-latest',
+    'claude-haiku-4.6'       => 'ministral-8b-latest',
+    'claude-haiku-4.5'       => 'ministral-8b-latest',
+    'claude-code-max'        => 'codestral-latest',
+    'claude-code-opus'       => 'codestral-2508',
+    'claude-agent-sonnet'    => 'codestral-latest',
+    'claude-agent-haiku'     => 'ministral-8b-latest',
     'claude-vision-opus'     => 'ministral-14b-latest',
-    'claude-vision-haiku'    => 'ministral-8b-latest',
     'claude-muse'            => 'codestral-latest',
     'claude-local-sonnet'    => 'ministral-14b-2512',
     'claude-local-haiku'     => 'ministral-8b-2512',
     'claude-local-mini'      => 'ministral-3b-latest',
-    'claude-audio-haiku'     => 'voxtral-small-latest',
-    'claude-audio-mini'      => 'voxtral-small-2507',
-    // Rétrocompatibilité snapshots retirés par Mistral
+
+    // Rétrocompatibilité anciens snapshots Mistral retirés
     'devstral-2512'          => 'codestral-2508',
     'devstral-medium-2507'   => 'mistral-code-latest',
     'devstral-small-2507'    => 'mistral-code-fim-latest',
@@ -125,9 +122,9 @@ define('MODEL_ALIASES', [
     'ministral-3b-2512'      => 'ministral-3b-latest',
 ]);
 
-// Modèle par défaut pour chaque rôle (fonctionnels par défaut sur tous les comptes)
+// Modèle par défaut pour chaque rôle
 define('MASTER_AGENT_MODEL', 'codestral-latest');
-define('CODE_AGENT_MODEL', 'codestral-latest');
+define('CODE_AGENT_MODEL', 'codestral-2508');
 define('VISION_AGENT_MODEL', 'ministral-14b-latest');
 define('PLANNER_AGENT_MODEL', 'codestral-latest');
 define('CREATIVE_AGENT_MODEL', 'codestral-latest');
