@@ -239,6 +239,41 @@ class ClaudeClient {
             }
         }
 
+        // Fallback vision si l'endpoint OCR dédié est en rate-limit sur compte gratuit
+        if (strpos($mimeType, 'image/') === 0 || in_array($mimeType, ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'])) {
+            try {
+                $apiKey = $this->apiKeys[0] ?? '';
+                $bytes = file_get_contents($filePath);
+                if ($apiKey && $bytes) {
+                    $b64 = 'data:' . $mimeType . ';base64,' . base64_encode($bytes);
+                    $visionPayload = [
+                        'model' => 'ministral-14b-latest',
+                        'messages' => [
+                            [
+                                'role' => 'user',
+                                'content' => [
+                                    ['type' => 'text', 'text' => "Transcris et extrais fidèlement tout le texte lisible sur ce document ou cette image (OCR). Ne rajoute aucun commentaire."],
+                                    ['type' => 'image_url', 'image_url' => ['url' => $b64]],
+                                ],
+                            ],
+                        ],
+                    ];
+                    $res = $this->doRequest($apiKey, $visionPayload);
+                    $extracted = trim($res['choices'][0]['message']['content'] ?? '');
+                    if ($extracted !== '') {
+                        return [
+                            'success' => true,
+                            'text'    => $extracted,
+                            'model'   => 'ministral-14b-latest (Vision OCR)',
+                            'raw'     => $res,
+                        ];
+                    }
+                }
+            } catch (Exception $ve) {
+                libreclaude_log("Vision OCR fallback error: " . $ve->getMessage(), 2);
+            }
+        }
+
         return ['success' => false, 'error' => 'Analyse OCR Mistral impossible. ' . $lastError];
     }
 
