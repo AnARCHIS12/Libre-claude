@@ -131,25 +131,34 @@ try {
         ];
     }
 
-    // Historique de la conversation (max 20 derniers messages)
+    // Historique de la conversation — tronqué par taille pour éviter context overflow (256K tokens ≈ ~800K chars)
     if ($convId && $useHistory) {
         $history = $db->fetchAll(
             "SELECT role, content FROM messages 
              WHERE conversation_id = ? 
              ORDER BY created_at DESC 
-             LIMIT 20",
+             LIMIT 40",
             [$convId]
         );
-        foreach (array_reverse($history) as $msg) {
-            if (in_array($msg['role'], ['user', 'assistant'])) {
-                if ($useWebSearch && $msg['role'] === 'user' && trim($msg['content']) === $message) {
-                    continue;
-                }
-                $apiMessages[] = [
-                    'role'    => $msg['role'],
-                    'content' => $msg['content'],
-                ];
+        // On reconstruit en partant des plus récents, on s'arrête à ~180K chars
+        $historyMessages = [];
+        $totalChars = mb_strlen($systemPrompt);
+        $maxHistoryChars = 180000;
+
+        foreach ($history as $msg) {
+            if (!in_array($msg['role'], ['user', 'assistant'])) continue;
+            if ($useWebSearch && $msg['role'] === 'user' && trim($msg['content']) === $message) continue;
+            // On tronque les messages individuels très longs (ex: base64 d'image en BDD)
+            $content = $msg['content'];
+            if (mb_strlen($content) > 8000) {
+                $content = mb_substr($content, 0, 8000) . '…[tronqué]';
             }
+            $totalChars += mb_strlen($content);
+            if ($totalChars > $maxHistoryChars) break;
+            $historyMessages[] = ['role' => $msg['role'], 'content' => $content];
+        }
+        foreach (array_reverse($historyMessages) as $msg) {
+            $apiMessages[] = $msg;
         }
     } else {
         // Sans compte, juste le message actuel
@@ -180,7 +189,7 @@ try {
 
                 echo json_encode([
                     'success'         => true,
-                    'content'         => $imgResult['content'] ?? 'Image générée.',
+                    'content'         => '',
                     'model'           => $imgResult['model'] ?? MISTRAL_IMAGE_MODEL,
                     'model_name'      => 'Générateur d\'images',
                     'conversation_id' => $convId,
