@@ -212,10 +212,121 @@ class ClaudeClient {
             return ['success' => false, 'error' => 'Fichier illisible'];
         }
 
-        $isPdf = $mimeType === 'application/pdf' || strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf';
+        $isPdf  = $mimeType === 'application/pdf' || strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf';
+        $isDocx = in_array($mimeType, [
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/msword',
+        ]) || in_array(strtolower(pathinfo($filePath, PATHINFO_EXTENSION)), ['docx', 'doc']);
+        $isPptx = in_array($mimeType, [
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/vnd.ms-powerpoint',
+        ]) || in_array(strtolower(pathinfo($filePath, PATHINFO_EXTENSION)), ['pptx', 'ppt']);
+        $isXlsx = in_array($mimeType, [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel',
+        ]) || in_array(strtolower(pathinfo($filePath, PATHINFO_EXTENSION)), ['xlsx', 'xls']);
+        $isOdt  = in_array($mimeType, [
+            'application/vnd.oasis.opendocument.text',
+            'application/vnd.oasis.opendocument.presentation',
+            'application/vnd.oasis.opendocument.spreadsheet',
+        ]) || in_array(strtolower(pathinfo($filePath, PATHINFO_EXTENSION)), ['odt', 'ods', 'odp']);
 
-        // Pour les PDFs : essayer pdftotext EN PREMIER (gratuit, pas de rate limit)
-        // On n'appelle Mistral OCR que si le PDF est un scan (pdftotext retourne vide)
+        // ── DOCX : extraction XML native via ZipArchive ─────────────────────
+        if ($isDocx && class_exists('ZipArchive')) {
+            $zip = new ZipArchive();
+            if ($zip->open($filePath) === true) {
+                $xml = $zip->getFromName('word/document.xml');
+                $zip->close();
+                if ($xml) {
+                    $dom = new DOMDocument();
+                    @$dom->loadXML($xml);
+                    $nodes = $dom->getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 't');
+                    $parts = [];
+                    foreach ($nodes as $node) { $parts[] = $node->textContent; }
+                    $text = trim(implode(' ', $parts));
+                    if ($text !== '') {
+                        return ['success' => true, 'text' => $text, 'model' => 'PHP ZipArchive (DOCX natif)', 'raw' => []];
+                    }
+                }
+            }
+        }
+
+        // ── PPTX : extraction XML native via ZipArchive ─────────────────────
+        if ($isPptx && class_exists('ZipArchive')) {
+            $zip = new ZipArchive();
+            if ($zip->open($filePath) === true) {
+                $parts = [];
+                for ($s = 1; $s <= 500; $s++) {
+                    $xml = $zip->getFromName("ppt/slides/slide{$s}.xml");
+                    if ($xml === false) break;
+                    $dom = new DOMDocument();
+                    @$dom->loadXML($xml);
+                    $nodes = $dom->getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main', 't');
+                    foreach ($nodes as $node) { $parts[] = $node->textContent; }
+                }
+                $zip->close();
+                $text = trim(implode("\n", $parts));
+                if ($text !== '') {
+                    return ['success' => true, 'text' => $text, 'model' => 'PHP ZipArchive (PPTX natif)', 'raw' => []];
+                }
+            }
+        }
+
+        // ── XLSX : extraction XML native via ZipArchive ─────────────────────
+        if ($isXlsx && class_exists('ZipArchive')) {
+            $zip = new ZipArchive();
+            if ($zip->open($filePath) === true) {
+                // Lire les shared strings
+                $sharedStrings = [];
+                $ssXml = $zip->getFromName('xl/sharedStrings.xml');
+                if ($ssXml) {
+                    $dom = new DOMDocument();
+                    @$dom->loadXML($ssXml);
+                    $tNodes = $dom->getElementsByTagNameNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 't');
+                    foreach ($tNodes as $t) { $sharedStrings[] = $t->textContent; }
+                }
+                // Lire les feuilles
+                $parts = [];
+                for ($sh = 1; $sh <= 50; $sh++) {
+                    $xml = $zip->getFromName("xl/worksheets/sheet{$sh}.xml");
+                    if ($xml === false) break;
+                    $dom = new DOMDocument();
+                    @$dom->loadXML($xml);
+                    $cNodes = $dom->getElementsByTagNameNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'c');
+                    foreach ($cNodes as $c) {
+                        $t = $c->getAttribute('t');
+                        $vNodes = $c->getElementsByTagNameNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'v');
+                        if ($vNodes->length > 0) {
+                            $val = $vNodes->item(0)->textContent;
+                            $parts[] = ($t === 's' && isset($sharedStrings[(int)$val])) ? $sharedStrings[(int)$val] : $val;
+                        }
+                    }
+                }
+                $zip->close();
+                $text = trim(implode("\t", $parts));
+                if ($text !== '') {
+                    return ['success' => true, 'text' => $text, 'model' => 'PHP ZipArchive (XLSX natif)', 'raw' => []];
+                }
+            }
+        }
+
+        // ── ODT/ODP/ODS : extraction XML native via ZipArchive ──────────────
+        if ($isOdt && class_exists('ZipArchive')) {
+            $zip = new ZipArchive();
+            if ($zip->open($filePath) === true) {
+                $xml = $zip->getFromName('content.xml');
+                $zip->close();
+                if ($xml) {
+                    // Supprimer les balises, garder le texte brut
+                    $text = trim(strip_tags(str_replace(['<text:p ', '<text:p>'], "\n<text:p", $xml)));
+                    if ($text !== '') {
+                        return ['success' => true, 'text' => $text, 'model' => 'PHP ZipArchive (ODT natif)', 'raw' => []];
+                    }
+                }
+            }
+        }
+
+        // ── PDF : pdftotext EN PREMIER (gratuit, pas de rate limit) ─────────
         if ($isPdf) {
             $pdfToText = trim(shell_exec('which pdftotext 2>/dev/null') ?? '');
             if ($pdfToText) {
@@ -227,16 +338,10 @@ class ClaudeClient {
                     @unlink($tmpOut);
                     if ($text !== '') {
                         libreclaude_log("pdftotext success: " . strlen($text) . " chars", 1);
-                        return [
-                            'success' => true,
-                            'text'    => $text,
-                            'model'   => 'pdftotext (extraction locale)',
-                            'raw'     => [],
-                        ];
+                        return ['success' => true, 'text' => $text, 'model' => 'pdftotext (extraction locale)', 'raw' => []];
                     }
                 }
                 @unlink($tmpOut);
-                // pdftotext vide = PDF scanné → on continue vers Mistral OCR
                 libreclaude_log("pdftotext vide, PDF probablement scanné → Mistral OCR", 1);
             }
         }

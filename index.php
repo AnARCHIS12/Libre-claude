@@ -1563,7 +1563,7 @@ body {
             <button class="quick-btn" onclick="setPrompt(<?= $jsText('quick_plan_prompt') ?>)"><i class="fa-solid fa-list-check"></i><?= htmlspecialchars($t('plan')) ?></button>
           </div>
           <div class="input-tools">
-            <input id="ocr-file-input" type="file" accept="image/*,.pdf,.docx,.pptx" hidden onchange="handleOcrFile(this)">
+            <input id="ocr-file-input" type="file" accept="image/*,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.odt,.odp,.ods" hidden onchange="handleOcrFile(this)">
             <button class="ocr-btn" id="ocr-btn" onclick="triggerOcrUpload()" type="button" title="<?= htmlspecialchars($t('ocr_analyze')) ?>" aria-label="<?= htmlspecialchars($t('ocr_analyze')) ?>">
               <i class="fa-solid fa-file-image"></i>
             </button>

@@ -53,6 +53,13 @@ $allowed = [
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/msword',
+    'application/vnd.ms-excel',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.presentation',
+    'application/vnd.oasis.opendocument.spreadsheet',
     'image/png',
     'image/jpeg',
     'image/jpg',
@@ -61,7 +68,7 @@ $allowed = [
     'image/gif',
 ];
 if (!in_array($mimeType, $allowed, true) && strpos($mimeType, 'image/') !== 0) {
-    echo json_encode(['success' => false, 'error' => 'Format non supporté pour l OCR']);
+    echo json_encode(['success' => false, 'error' => 'Format non supporté. Formats acceptés : PDF, DOCX, XLSX, PPTX, ODT, images.']);
     exit;
 }
 
