@@ -148,10 +148,11 @@ try {
         foreach ($history as $msg) {
             if (!in_array($msg['role'], ['user', 'assistant'])) continue;
             if ($useWebSearch && $msg['role'] === 'user' && trim($msg['content']) === $message) continue;
-            // On tronque les messages individuels très longs (ex: base64 d'image en BDD)
             $content = $msg['content'];
-            if (mb_strlen($content) > 8000) {
-                $content = mb_substr($content, 0, 8000) . '…[tronqué]';
+            // Remplacer les images markdown par un placeholder court (évite base64 ou longues URLs dans le contexte)
+            $content = preg_replace('/!\[.*?\]\([^)]+\)/u', '[image générée]', $content);
+            if (mb_strlen($content) > 4000) {
+                $content = mb_substr($content, 0, 4000) . '…[tronqué]';
             }
             $totalChars += mb_strlen($content);
             if ($totalChars > $maxHistoryChars) break;
@@ -170,17 +171,27 @@ try {
         try {
             $imgResult = $claude->generateImage($message);
             if (!empty($imgResult['success'])) {
-                $assistantContent = $imgResult['content'] ?? 'Image générée.';
+                // Sauvegarder les images sur disque pour l historique
+                $dbContent = '';
                 if (!empty($imgResult['images'])) {
+                    $dir = dirname(__FILE__) . '/data/generated_images';
+                    if (!is_dir($dir)) mkdir($dir, 0755, true);
                     foreach ($imgResult['images'] as $img) {
-                        $assistantContent .= "\n\n![Image](data:" . ($img['mime'] ?? 'image/png') . ";base64," . $img['base64'] . ")";
+                        $ext = ($img['mime'] ?? 'image/png') === 'image/jpeg' ? 'jpg' : 'png';
+                        $fname = 'img_' . date('Ymd_His') . '_' . substr(md5(microtime()), 0, 6) . '.' . $ext;
+                        $data = base64_decode($img['base64']);
+                        if ($data && file_put_contents($dir . '/' . $fname, $data)) {
+                            $dbContent .= "\n\n![Image générée](/data/generated_images/$fname)";
+                        }
                     }
                 }
+                if ($dbContent === '') $dbContent = '🖼️ Image générée — ' . mb_substr($message, 0, 80);
+
                 if ($convId) {
                     $db->insert('messages', [
                         'conversation_id' => $convId,
                         'role'            => 'assistant',
-                        'content'         => $assistantContent,
+                        'content'         => trim($dbContent),
                         'model_used'      => $imgResult['model'] ?? MISTRAL_IMAGE_MODEL,
                         'tokens_used'     => 0,
                     ]);

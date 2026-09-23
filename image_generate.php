@@ -1,6 +1,7 @@
 <?php
 /**
  * Libre Claude - Génération d images Mistral
+ * Sauvegarde les images sur disque pour les afficher dans l historique
  */
 require_once dirname(__FILE__) . '/config.php';
 require_once dirname(__FILE__) . '/database.php';
@@ -40,6 +41,24 @@ if ($prompt === '') {
 
 $apiKey = $user['mistral_api_key'] ?: null;
 
+/**
+ * Sauvegarde une image base64 sur disque et retourne son URL relative
+ */
+function saveGeneratedImage(string $base64, string $mime = 'image/png'): ?string {
+    $dir = dirname(__FILE__) . '/data/generated_images';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    $ext = $mime === 'image/jpeg' ? 'jpg' : 'png';
+    $filename = 'img_' . date('Ymd_His') . '_' . substr(md5(microtime()), 0, 6) . '.' . $ext;
+    $path = $dir . '/' . $filename;
+    $data = base64_decode($base64);
+    if ($data === false || file_put_contents($path, $data) === false) {
+        return null;
+    }
+    return '/data/generated_images/' . $filename;
+}
+
 try {
     $claude = getClaudeClient($apiKey);
     $result = $claude->generateImage($prompt);
@@ -52,6 +71,23 @@ try {
                 'title'   => mb_substr($prompt, 0, 50, 'UTF-8'),
             ]);
         }
+
+        // Sauvegarder chaque image sur disque, construire le contenu BDD avec URLs
+        $savedUrls = [];
+        $dbContent = '';
+        if (!empty($result['images'])) {
+            foreach ($result['images'] as $img) {
+                $url = saveGeneratedImage($img['base64'], $img['mime'] ?? 'image/png');
+                if ($url) {
+                    $savedUrls[] = $url;
+                    $dbContent .= "\n\n![Image générée]($url)";
+                }
+            }
+        }
+        if ($dbContent === '') {
+            $dbContent = '🖼️ Image générée — ' . mb_substr($prompt, 0, 80);
+        }
+
         if ($convId) {
             $db->insert('messages', [
                 'conversation_id' => $convId,
@@ -59,32 +95,27 @@ try {
                 'content'         => $prompt,
                 'model_used'      => 'image-generation',
             ]);
-            $assistantContent = $result['content'] ?? 'Image générée.';
-            if (!empty($result['images'])) {
-                foreach ($result['images'] as $img) {
-                    $assistantContent .= "\n\n![Image](data:" . ($img['mime'] ?? 'image/png') . ";base64," . $img['base64'] . ")";
-                }
-            }
             $db->insert('messages', [
                 'conversation_id' => $convId,
                 'role'            => 'assistant',
-                'content'         => $assistantContent,
+                'content'         => trim($dbContent),
                 'model_used'      => $result['model'] ?? MISTRAL_IMAGE_MODEL,
             ]);
             $db->update('conversations', ['updated_at' => date('Y-m-d H:i:s')], 'id = ?', [$convId]);
         }
 
         echo json_encode([
-            'success' => true,
-            'content' => $result['content'] ?? 'Image générée.',
-            'model' => $result['model'] ?? MISTRAL_IMAGE_MODEL,
-            'images' => $result['images'] ?? [],
+            'success'         => true,
+            'content'         => '',
+            'model'           => $result['model'] ?? MISTRAL_IMAGE_MODEL,
+            'images'          => $result['images'] ?? [],
+            'saved_urls'      => $savedUrls,
             'conversation_id' => $convId,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     } else {
         echo json_encode([
             'success' => false,
-            'error' => $result['error'] ?? 'Génération d image impossible',
+            'error'   => $result['error'] ?? 'Génération d image impossible',
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 } catch (Exception $e) {
