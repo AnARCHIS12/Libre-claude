@@ -405,7 +405,7 @@ function workspace_generate_files($prompt, $contextFiles, $tree, $user, &$raw, &
     $result = $client->chat([
         ['role' => 'system', 'content' => 'Tu es Libre Claude Coder. Retourne uniquement un JSON valide: [{"path":"...","content":"..."}].'],
         ['role' => 'user', 'content' => "Arborescence:\n" . implode("\n", $treeLines) . "\n\nContexte:" . ($context ?: "\nAucun fichier complet fourni.") . "\n\nDemande:\n" . $prompt],
-    ], defined('MASTER_AGENT_MODEL') ? MASTER_AGENT_MODEL : 'codestral-latest', [
+    ], defined('CODE_AGENT_MODEL') ? CODE_AGENT_MODEL : 'codestral-latest', [
         'temperature' => 0.25,
         'max_tokens' => 8192,
     ]);
