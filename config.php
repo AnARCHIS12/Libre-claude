@@ -54,45 +54,41 @@ define('GITHUB_OAUTH_SCOPE', trim(libreclaude_env('GITHUB_OAUTH_SCOPE', '')));
 // Modèles organisés par catégorie
 define('MISTRAL_MODELS', [
     'flagship' => [
-        ['id' => 'mistral-large-latest', 'name' => 'Claude Opus 4.6', 'desc' => 'Dernière génération Large, alias stable'],
-        ['id' => 'mistral-large-2512', 'name' => 'Claude Opus 4.5', 'desc' => 'Raisonnement avancé, contextes massifs'],
-        ['id' => 'mistral-large-2411', 'name' => 'Claude Opus 4', 'desc' => 'Version stable entreprise'],
+        ['id' => 'mistral-large-latest', 'name' => 'Claude Opus 4.6', 'desc' => 'Dernière génération Large (Payant / Carte bancaire)'],
+        ['id' => 'mistral-large-2512', 'name' => 'Claude Opus 4.5', 'desc' => 'Raisonnement avancé (Payant / Carte bancaire)'],
+        ['id' => 'mistral-large-2411', 'name' => 'Claude Opus 4', 'desc' => 'Version stable entreprise (Payant / Carte bancaire)'],
+    ],
+    'code' => [
+        ['id' => 'codestral-latest', 'name' => 'Claude Code Max', 'desc' => 'Code & Chat temps réel — Gratuit'],
+        ['id' => 'codestral-2508', 'name' => 'Claude Code Opus', 'desc' => 'Architecture, refactoring, FIM — Gratuit'],
+        ['id' => 'mistral-code-latest', 'name' => 'Claude Code Sonnet', 'desc' => 'Débogage, patterns complexes — Gratuit'],
+        ['id' => 'mistral-code-fim-latest', 'name' => 'Claude Code Haiku', 'desc' => 'Tests unitaires, CI/CD — Gratuit'],
+    ],
+    'vision' => [
+        ['id' => 'ministral-14b-latest', 'name' => 'Claude Vision Opus', 'desc' => 'Multimodal 14B, diagrammes, UI — Gratuit'],
+        ['id' => 'ministral-8b-latest', 'name' => 'Claude Vision Haiku', 'desc' => 'Multimodal 8B, OCR rapide — Gratuit'],
+    ],
+    'edge' => [
+        ['id' => 'ministral-14b-2512', 'name' => 'Claude Local Sonnet', 'desc' => 'Modèle compact puissant 14B — Gratuit'],
+        ['id' => 'ministral-8b-2512', 'name' => 'Claude Local Haiku', 'desc' => 'All-rounder équilibré 8B — Gratuit'],
+        ['id' => 'ministral-3b-latest', 'name' => 'Claude Local Mini', 'desc' => 'Ultra-léger 3B, commandes courtes — Gratuit'],
     ],
     'medium' => [
-        ['id' => 'mistral-medium-2604', 'name' => 'Claude Sonnet 4.6', 'desc' => 'Mistral Medium 3.5 — multimodal, agentique'],
-        ['id' => 'mistral-medium-2508', 'name' => 'Claude Sonnet 4.5', 'desc' => 'Analyse textuelle, rédaction'],
-        ['id' => 'mistral-medium-2505', 'name' => 'Claude Sonnet 4', 'desc' => 'RAG, synthèse documents'],
+        ['id' => 'mistral-medium-latest', 'name' => 'Claude Sonnet 4.6', 'desc' => 'Mistral Medium 3.5 — multimodal, agentique'],
+        ['id' => 'mistral-medium-2604', 'name' => 'Claude Sonnet 4.5', 'desc' => 'Analyse textuelle, rédaction'],
+        ['id' => 'mistral-medium-3', 'name' => 'Claude Sonnet 4', 'desc' => 'RAG, synthèse documents'],
     ],
     'small' => [
         ['id' => 'mistral-small-latest', 'name' => 'Claude Haiku 4.6', 'desc' => 'Mistral Small 4 — hybride rapide et efficace'],
         ['id' => 'mistral-small-2603', 'name' => 'Claude Haiku 4.5', 'desc' => 'Extraction masse, pipelines'],
-        ['id' => 'mistral-small-2506', 'name' => 'Claude Haiku 4', 'desc' => 'Classification, tagging'],
-    ],
-    'code' => [
-        ['id' => 'codestral-2508', 'name' => 'Claude Code Max', 'desc' => 'Auto-complétion, FIM temps réel'],
-        ['id' => 'devstral-2512', 'name' => 'Claude Code Opus', 'desc' => 'Architecture, déploiement, refactoring'],
-        ['id' => 'devstral-medium-2507', 'name' => 'Claude Code Sonnet', 'desc' => 'Débogage, patterns complexes'],
-        ['id' => 'devstral-small-2507', 'name' => 'Claude Code Haiku', 'desc' => 'Tests unitaires, CI/CD'],
     ],
     'agent' => [
-        ['id' => 'magistral-medium-2509', 'name' => 'Claude Agent Sonnet', 'desc' => 'Orchestration multi-agents'],
-        ['id' => 'magistral-small-2509', 'name' => 'Claude Agent Haiku', 'desc' => 'Routage rapide prompts'],
-    ],
-    'vision' => [
-        ['id' => 'pixtral-large-2411', 'name' => 'Claude Vision Opus', 'desc' => 'UI, plans, diagrammes complexes'],
-        ['id' => 'pixtral-12b-2409', 'name' => 'Claude Vision Haiku', 'desc' => 'OCR, détection objets'],
-    ],
-    'creative' => [
-        ['id' => 'labs-mistral-small-creative', 'name' => 'Claude Muse', 'desc' => 'Storytelling, brainstorming'],
-    ],
-    'edge' => [
-        ['id' => 'ministral-14b-2512', 'name' => 'Claude Local Sonnet', 'desc' => 'Modèle compact puissant'],
-        ['id' => 'ministral-8b-2512', 'name' => 'Claude Local Haiku', 'desc' => 'All-rounder mobile'],
-        ['id' => 'ministral-3b-2512', 'name' => 'Claude Local Mini', 'desc' => 'Ultra-léger, commande vocale'],
+        ['id' => 'magistral-medium-latest', 'name' => 'Claude Agent Sonnet', 'desc' => 'Orchestration multi-agents'],
+        ['id' => 'magistral-small-latest', 'name' => 'Claude Agent Haiku', 'desc' => 'Routage rapide prompts'],
     ],
     'audio' => [
-        ['id' => 'voxtral-small-2507', 'name' => 'Claude Audio Haiku', 'desc' => 'Analyse sémantique audio'],
-        ['id' => 'voxtral-mini-2507', 'name' => 'Claude Audio Mini', 'desc' => 'Traitement flux rapide'],
+        ['id' => 'voxtral-small-latest', 'name' => 'Claude Audio Haiku', 'desc' => 'Analyse sémantique audio — Gratuit'],
+        ['id' => 'voxtral-small-2507', 'name' => 'Claude Audio Mini', 'desc' => 'Traitement flux rapide — Gratuit'],
     ],
 ]);
 
@@ -100,34 +96,41 @@ define('MODEL_ALIASES', [
     'claude-opus-4.6'        => 'mistral-large-latest',
     'claude-opus-4.5'        => 'mistral-large-2512',
     'claude-opus-4'          => 'mistral-large-2411',
-    'claude-sonnet-4.6'      => 'mistral-medium-2604',
-    'claude-sonnet-4.5'      => 'mistral-medium-2508',
-    'claude-sonnet-4'        => 'mistral-medium-2505',
+    'claude-sonnet-4.6'      => 'mistral-medium-latest',
+    'claude-sonnet-4.5'      => 'mistral-medium-2604',
+    'claude-sonnet-4'        => 'mistral-medium-3',
     'claude-haiku-4.6'       => 'mistral-small-latest',
     'claude-haiku-4.5'       => 'mistral-small-2603',
-    'claude-haiku-4'         => 'mistral-small-2506',
-    'claude-code-max'        => 'codestral-2508',
-    'claude-code-opus'       => 'devstral-2512',
-    'claude-code-sonnet'     => 'devstral-medium-2507',
-    'claude-code-haiku'      => 'devstral-small-2507',
-    'claude-agent-sonnet'    => 'magistral-medium-2509',
-    'claude-agent-haiku'     => 'magistral-small-2509',
-    'claude-vision-opus'     => 'pixtral-large-2411',
-    'claude-vision-haiku'    => 'pixtral-12b-2409',
-    'claude-muse'            => 'labs-mistral-small-creative',
+    'claude-code-max'        => 'codestral-latest',
+    'claude-code-opus'       => 'codestral-2508',
+    'claude-code-sonnet'     => 'mistral-code-latest',
+    'claude-code-haiku'      => 'mistral-code-fim-latest',
+    'claude-agent-sonnet'    => 'magistral-medium-latest',
+    'claude-agent-haiku'     => 'magistral-small-latest',
+    'claude-vision-opus'     => 'ministral-14b-latest',
+    'claude-vision-haiku'    => 'ministral-8b-latest',
+    'claude-muse'            => 'codestral-latest',
     'claude-local-sonnet'    => 'ministral-14b-2512',
     'claude-local-haiku'     => 'ministral-8b-2512',
-    'claude-local-mini'      => 'ministral-3b-2512',
-    'claude-audio-haiku'     => 'voxtral-small-2507',
-    'claude-audio-mini'      => 'voxtral-mini-2507',
+    'claude-local-mini'      => 'ministral-3b-latest',
+    'claude-audio-haiku'     => 'voxtral-small-latest',
+    'claude-audio-mini'      => 'voxtral-small-2507',
+    // Rétrocompatibilité snapshots retirés par Mistral
+    'devstral-2512'          => 'codestral-2508',
+    'devstral-medium-2507'   => 'mistral-code-latest',
+    'devstral-small-2507'    => 'mistral-code-fim-latest',
+    'pixtral-large-2411'     => 'ministral-14b-latest',
+    'pixtral-12b-2409'       => 'ministral-8b-latest',
+    'labs-mistral-small-creative' => 'codestral-latest',
+    'ministral-3b-2512'      => 'ministral-3b-latest',
 ]);
 
-// Modèle par défaut pour chaque rôle
-define('MASTER_AGENT_MODEL', 'mistral-large-2512');
-define('CODE_AGENT_MODEL', 'devstral-2512');
-define('VISION_AGENT_MODEL', 'pixtral-large-2411');
-define('PLANNER_AGENT_MODEL', 'magistral-medium-2509');
-define('CREATIVE_AGENT_MODEL', 'labs-mistral-small-creative');
+// Modèle par défaut pour chaque rôle (fonctionnels par défaut sur tous les comptes)
+define('MASTER_AGENT_MODEL', 'codestral-latest');
+define('CODE_AGENT_MODEL', 'codestral-latest');
+define('VISION_AGENT_MODEL', 'ministral-14b-latest');
+define('PLANNER_AGENT_MODEL', 'codestral-latest');
+define('CREATIVE_AGENT_MODEL', 'codestral-latest');
 
 // Sécurité
 define('PASSWORD_MIN_LENGTH', 8);

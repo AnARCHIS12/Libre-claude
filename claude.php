@@ -84,6 +84,13 @@ class ClaudeClient {
             }
         }
 
+        if ($lastError && stripos($lastError, 'subscription tier') !== false) {
+            return ['success' => false, 'error' => "Ce modèle requiert un abonnement Mistral payant (carte bancaire). Pour utiliser votre clé gratuite, sélectionnez Claude Code Max ou Claude Local Sonnet."];
+        }
+        if ($lastError && (stripos($lastError, 'Rate limit') !== false || stripos($lastError, '429') !== false)) {
+            return ['success' => false, 'error' => "Limite de requêtes atteinte sur ce modèle. Pour utiliser votre clé gratuite, sélectionnez Claude Code Max ou Claude Local Sonnet."];
+        }
+
         $errorDetail = $lastError ? " ($lastError)" : '';
         return ['success' => false, 'error' => "Toutes les clés API ont échoué$errorDetail. Vérifiez vos clés Claude."];
     }
